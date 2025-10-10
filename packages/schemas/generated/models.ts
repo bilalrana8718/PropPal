@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED TypeScript interfaces from Pydantic models
  * DO NOT EDIT MANUALLY - Changes will be overwritten
- * Generated on: 2025-10-10T19:41:08.939666
+ * Generated on: 2025-10-11T00:41:43.928575
  */
 
 export interface UserResponse {
@@ -23,7 +23,8 @@ export interface UserCreate {
   /** User role: buyer, seller, builder, admin */
   role: string;
   profile_image?: string | null;
-  password: string;
+  /** Clerk user ID */
+  clerk_user_id: string;
 }
 
 export interface PropertyResponse {

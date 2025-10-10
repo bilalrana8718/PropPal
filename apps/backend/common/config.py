@@ -36,6 +36,27 @@ class Settings(BaseSettings):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="Access token expiration time in minutes")
 
+    # Clerk Configuration
+    CLERK_PUBLISHABLE_KEY: str = Field(
+        default="", description="Clerk publishable key for frontend"
+    )
+
+    CLERK_SECRET_KEY: str = Field(
+        default="", description="Clerk secret key for backend verification"
+    )
+
+    CLERK_WEBHOOK_SECRET: str = Field(
+        default="", description="Clerk webhook secret for signature verification"
+    )
+
+    CLERK_JWKS_URL: str = Field(
+        default="", description="Clerk JWKS URL for JWT verification"
+    )
+
+    CLERK_ISSUER_URL: str = Field(
+        default="", description="Clerk issuer URL for JWT verification"
+    )
+
     # Service URLs
     NLP_SERVICE_URL: str = Field(default="http://localhost:8001", description="URL of the NLP/RAG service")
 

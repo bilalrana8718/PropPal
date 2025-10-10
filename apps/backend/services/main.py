@@ -35,6 +35,12 @@ try:
 except ModuleNotFoundError:
     from services.auth import AuthenticatedUser, get_current_user
 
+# Import webhook router
+try:
+    from services.webhooks import router as webhook_router
+except ModuleNotFoundError:
+    from webhooks import router as webhook_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -317,6 +323,14 @@ async def create_property_example(
         "property": property_with_user,
         "authenticated_user": {"user_id": user.user_id, "role": user.role},
     }
+
+
+# =====================================================================
+# Include Routers
+# =====================================================================
+
+# Include webhook router for Clerk integration
+app.include_router(webhook_router)
 
 
 # =====================================================================

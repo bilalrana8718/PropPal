@@ -36,6 +36,6 @@ USER appuser
 # Expose port (can be overridden by docker-compose)
 EXPOSE 8000
 
-# Default command (can be overridden by docker-compose)
+# Default command for Railway deployment
 CMD ["uvicorn", "services.main:app", "--host", "0.0.0.0", "--port", "8000"]
 

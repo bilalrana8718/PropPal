@@ -20,6 +20,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from common.config import get_settings  # noqa: E402
 from common.errors import AuthenticationFailedException  # noqa: E402
+from common.db import get_database  # noqa: E402
+from common.repositories.user_repository import get_user_repository  # noqa: E402
+from models.users import User  # noqa: E402
 
 # Security scheme
 security = HTTPBearer()
@@ -32,28 +35,68 @@ JWKS_CACHE_DURATION = 3600  # 1 hour in seconds
 
 class AuthenticatedUser(BaseModel):
     """
-    Authenticated user model extracted from Clerk JWT.
+    Authenticated user model extracted from Clerk JWT and internal database.
 
-    This represents the verified user information from the token.
+    This represents the verified user information from both Clerk token
+    and the internal user database, providing complete user context.
     """
 
-    user_id: str = Field(..., description="Clerk user ID (sub claim)")
+    # Clerk-specific fields
+    clerk_user_id: str = Field(..., description="Clerk user ID (sub claim)")
     email: Optional[str] = Field(None, description="User email address")
-    role: str = Field(default="user", description="User role")
+    role: str = Field("user", description="User role from internal database")
     session_id: Optional[str] = Field(None, description="Clerk session ID")
-    org_id: Optional[str] = Field(None, description="Organization ID if applicable")
+    org_id: Optional[str] = Field(None, description="Organization ID if part of one")
+    public_metadata: Dict[str, Any] = Field({}, description="Public metadata from Clerk")
 
-    # Metadata from Clerk
-    public_metadata: Dict[str, Any] = Field(default_factory=dict)
+    # Internal database user object
+    internal_user: Optional[User] = Field(None, description="Complete user object from internal database")
+
+    # Convenience properties for backward compatibility
+    @property
+    def user_id(self) -> str:
+        """Alias for clerk_user_id for backward compatibility."""
+        return self.clerk_user_id
+
+    @property
+    def name(self) -> Optional[str]:
+        """Get user name from internal user object."""
+        return self.internal_user.name if self.internal_user else None
+
+    @property
+    def phone(self) -> Optional[str]:
+        """Get user phone from internal user object."""
+        return self.internal_user.phone if self.internal_user else None
+
+    @property
+    def profile_image(self) -> Optional[str]:
+        """Get user profile image from internal user object."""
+        return self.internal_user.profile_image if self.internal_user else None
+
+    @property
+    def created_at(self) -> Optional[datetime]:
+        """Get user creation date from internal user object."""
+        return self.internal_user.created_at if self.internal_user else None
+
+    @property
+    def updated_at(self) -> Optional[datetime]:
+        """Get user update date from internal user object."""
+        return self.internal_user.updated_at if self.internal_user else None
 
     class Config:
         json_schema_extra = {
             "example": {
-                "user_id": "user_2abcd1234",
+                "clerk_user_id": "user_2abcd1234",
                 "email": "user@example.com",
                 "role": "admin",
                 "session_id": "sess_xyz789",
                 "public_metadata": {"custom_field": "value"},
+                "internal_user": {
+                    "id": "507f1f77bcf86cd799439011",
+                    "name": "John Doe",
+                    "phone": "+92-300-1234567",
+                    "profile_image": "https://example.com/profile.jpg"
+                }
             }
         }
 
@@ -150,12 +193,15 @@ async def verify_clerk_token(token: str) -> Dict[str, Any]:
         )
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db = Depends(get_database)
+) -> AuthenticatedUser:
     """
     FastAPI dependency to get the current authenticated user.
 
     Extracts and verifies the Clerk JWT token from the Authorization header,
-    then returns the authenticated user information.
+    then fetches the complete user information from the internal database.
 
     Usage:
         ```python
@@ -168,9 +214,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
     Args:
         credentials: HTTP Bearer credentials from the Authorization header
+        db: Database dependency for fetching internal user data
 
     Returns:
-        AuthenticatedUser: The authenticated user information
+        AuthenticatedUser: The authenticated user information with internal user data
 
     Raises:
         AuthenticationFailedException: If authentication fails
@@ -187,8 +234,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     payload = await verify_clerk_token(token)
 
     # Extract user information from payload
-    user_id = payload.get("sub")
-    if not user_id:
+    clerk_user_id = payload.get("sub")
+    if not clerk_user_id:
         raise AuthenticationFailedException(
             message="Token does not contain user ID (sub claim)", details={"error": "invalid_token_format"}
         )
@@ -207,8 +254,23 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if "role" in payload:
         role = payload["role"]
 
+    # Fetch internal user from database
+    user_repository = get_user_repository(db)
+    internal_user = await user_repository.get_user_by_clerk_id(clerk_user_id)
+
+    # If internal user exists, use their role from the database
+    if internal_user:
+        role = internal_user.role
+        email = internal_user.email  # Use email from database as source of truth
+
     return AuthenticatedUser(
-        user_id=user_id, email=email, role=role, session_id=session_id, org_id=org_id, public_metadata=public_metadata
+        clerk_user_id=clerk_user_id,
+        email=email,
+        role=role,
+        session_id=session_id,
+        org_id=org_id,
+        public_metadata=public_metadata,
+        internal_user=internal_user
     )
 
 
