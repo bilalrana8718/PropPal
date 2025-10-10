@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from common.config import get_settings
-from common.errors import AuthenticationFailedException
+from common.config import get_settings  # noqa: E402
+from common.errors import AuthenticationFailedException  # noqa: E402
 
 # Security scheme
 security = HTTPBearer()
@@ -81,15 +81,16 @@ async def get_clerk_jwks() -> Dict[str, Any]:
     # Fetch new JWKS
     # Note: Clerk uses a standard JWKS endpoint at /.well-known/jwks.json
     # The domain is extracted from the Clerk publishable key or configured separately
-    settings = get_settings()
+    # settings = get_settings()  # noqa: F841
 
     # For Clerk, the JWKS URL format is: https://[clerk-domain]/.well-known/jwks.json
     # We'll need to configure the Clerk domain in settings
-    clerk_domain = settings.SECRET_KEY  # This should be configured properly
-
     # For now, we'll use a simpler approach with the secret key
     # In production, you should use JWKS for RS256 tokens
     # For development with HS256, we can skip JWKS
+
+    _jwks_cache = {}
+    _jwks_cache_time = datetime.utcnow()
 
     return {}
 

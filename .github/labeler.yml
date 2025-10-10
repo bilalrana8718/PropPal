@@ -1,10 +1,6 @@
 # Auto-labeling configuration for PRs based on changed files
 
 # Frontend labels
-frontend:
-  - apps/web/**/*
-  - apps/mobile/**/*
-
 frontend:web:
   - apps/web/**/*
 
