@@ -2,8 +2,11 @@
 
 *A Multi-Agent AI-Powered Real Estate Platform*
 
-[![Phase 0](https://img.shields.io/badge/Phase%200-Complete-success)](./PHASE0_COMPLETE.md)
+[![Phase 0](https://img.shields.io/badge/Phase%200-Complete-success)](./docs/PHASE0_SETUP.md)
+[![CI](https://github.com/bilalrana8718/PropPal/actions/workflows/ci.yml/badge.svg)](https://github.com/bilalrana8718/PropPal/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](./LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Python-3.13-blue)](https://www.python.org/)
 
 ---
 
@@ -198,20 +201,52 @@ We welcome contributions! Please see our [Contributing Guide](./docs/CONTRIBUTIN
 
 ---
 
+## ⚙️ CI/CD Pipeline
+
+PropPal uses **GitHub Actions** and **Turborepo** for automated quality assurance:
+
+### Automated Checks
+- ✅ **Linting**: ESLint/Prettier (JS/TS) + Black/Flake8 (Python)
+- ✅ **Type Checking**: TypeScript strict mode
+- ✅ **Build**: All workspaces + schema generation
+- ✅ **Tests**: Unit & integration tests
+- ✅ **Security**: Dependency vulnerability scanning
+
+### PR Automation
+- 🏷️ **Auto-labeling**: Based on changed files
+- 📊 **Size Analysis**: Warns on large PRs
+- ⚠️ **Breaking Changes**: Automatic detection
+- ✅ **Status Comments**: Results posted to PRs
+
+### Quick Local Testing
+```bash
+npm run lint          # Run all linting
+npm run build         # Build all workspaces
+npm run test          # Run all tests
+```
+
+📖 **[CI/CD Documentation](./.github/README.md)** | **[Contributing Guide](./CONTRIBUTING.md)**
+
+---
+
 ## 📝 Available Scripts
 
 ```bash
-# Backend Services
-npm run docker:up      # Start Docker services
-npm run docker:down    # Stop Docker services
-npm run docker:logs    # View service logs
-
 # Development
 npm run dev            # Start all dev servers
-npm run build          # Build backend + schemas
+npm run build          # Build all workspaces
 npm run lint           # Lint all code
 npm run format         # Format all code
 npm run test           # Run all tests
+
+# Docker Services
+npm run docker:up              # Start containers
+npm run docker:down            # Stop containers
+npm run docker:logs            # View logs
+npm run docker:restart         # Restart containers
+npm run docker:rebuild         # Rebuild all images
+npm run docker:rebuild:gateway # Rebuild gateway only
+npm run docker:rebuild:up      # Rebuild and start
 
 # Code Quality
 npm run lint:js        # Lint JavaScript/TypeScript

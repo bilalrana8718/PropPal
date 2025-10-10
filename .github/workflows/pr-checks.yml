@@ -1,0 +1,129 @@
+name: PR Checks & Labels
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  # ============================================================================
+  # Auto-label PRs based on changed files
+  # ============================================================================
+  label:
+    name: Label PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Label based on file changes
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # Check PR title format
+  # ============================================================================
+  title-check:
+    name: Check PR Title
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check PR title format
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+          requireScope: false
+          subjectPattern: ^(?![A-Z]).+$
+          subjectPatternError: |
+            The subject "{subject}" found in the PR title "{title}"
+            should start with a lowercase letter.
+
+  # ============================================================================
+  # Check PR size
+  # ============================================================================
+  size-check:
+    name: Check PR Size
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check PR size
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const additions = pr.additions;
+            const deletions = pr.deletions;
+            const changes = additions + deletions;
+            
+            let size = 'small';
+            let emoji = '🟢';
+            
+            if (changes > 1000) {
+              size = 'extra-large';
+              emoji = '🔴';
+            } else if (changes > 500) {
+              size = 'large';
+              emoji = '🟠';
+            } else if (changes > 200) {
+              size = 'medium';
+              emoji = '🟡';
+            }
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${emoji} **PR Size:** ${size}\n\n**Changes:** +${additions} -${deletions} (${changes} total)\n\n${changes > 500 ? '⚠️ Consider breaking this PR into smaller chunks for easier review.' : '✅ Good PR size for review!'}`
+            });
+
+  # ============================================================================
+  # Check for breaking changes
+  # ============================================================================
+  breaking-changes:
+    name: Check Breaking Changes
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check for breaking changes
+        run: |
+          if git log --format=%B ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | grep -i "BREAKING CHANGE"; then
+            echo "⚠️ Breaking changes detected in this PR"
+            echo "breaking_change=true" >> $GITHUB_ENV
+          else
+            echo "✅ No breaking changes detected"
+            echo "breaking_change=false" >> $GITHUB_ENV
+          fi
+      
+      - name: Comment if breaking changes found
+        if: env.breaking_change == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ **Breaking Changes Detected**\n\nThis PR contains breaking changes. Please:\n1. Update the CHANGELOG\n2. Increment the major version\n3. Add migration guide in the description'
+            });
+

@@ -1,291 +1,237 @@
 # Contributing to PropPal
 
-Thank you for your interest in contributing to PropPal! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to PropPal! This guide will help you get started.
 
-## Table of Contents
+## 📋 Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
 - [Getting Started](#getting-started)
-- [Development Process](#development-process)
-- [Coding Standards](#coding-standards)
+- [Development Workflow](#development-workflow)
 - [Commit Guidelines](#commit-guidelines)
 - [Pull Request Process](#pull-request-process)
-- [Project Structure](#project-structure)
+- [Coding Standards](#coding-standards)
+- [Testing](#testing)
+- [Documentation](#documentation)
 
 ## Code of Conduct
 
-By participating in this project, you agree to maintain a respectful and inclusive environment for all contributors.
+By participating in this project, you agree to abide by our Code of Conduct:
+- Be respectful and inclusive
+- Welcome newcomers
+- Focus on what is best for the community
+- Show empathy towards others
 
 ## Getting Started
 
-1. **Fork the repository** on GitHub
-2. **Clone your fork** locally:
+### Prerequisites
+
+- **Node.js**: v20 or higher
+- **Python**: v3.13 or higher
+- **Docker**: Latest version
+- **Git**: Latest version
+
+### Setup Development Environment
+
+1. **Fork the repository**
    ```bash
+   # Click "Fork" on GitHub, then:
    git clone https://github.com/YOUR_USERNAME/PropPal.git
    cd PropPal
    ```
-3. **Add upstream remote**:
-   ```bash
-   git remote add upstream https://github.com/bilalrana8718/PropPal.git
-   ```
-4. **Install dependencies**:
+
+2. **Install dependencies**
    ```bash
    npm install
-   cd apps/backend && pip install -r requirements.txt && cd ../..
+   cd apps/backend
+   python -m venv venv
+   .\venv\Scripts\activate  # Windows
+   # source venv/bin/activate  # Mac/Linux
+   pip install -r requirements.txt
+   cd ../..
    ```
-5. **Create a new branch** for your work:
+
+3. **Set up environment variables**
    ```bash
-   git checkout -b feature/your-feature-name
+   # Frontend
+   cp apps/web/env.template apps/web/.env.local
+   # Edit apps/web/.env.local with your Clerk keys
+   
+   # Backend
+   cp apps/backend/.env.example apps/backend/.env
+   # Edit apps/backend/.env with your MongoDB and Clerk keys
    ```
 
-## Development Process
+4. **Verify setup**
+   ```bash
+   npm run lint
+   npm run build
+   npm run dev
+   ```
 
-### 1. Sync with Upstream
+## Development Workflow
 
-Before starting work, ensure your fork is up to date:
+### 1. Create a Branch
 
 ```bash
+# Update main
 git checkout main
 git pull upstream main
-git push origin main
-```
 
-### 2. Create a Feature Branch
-
-```bash
-git checkout -b feature/your-feature-name
+# Create feature branch
+git checkout -b feat/your-feature-name
 # or
 git checkout -b fix/bug-description
 ```
 
-### 3. Make Your Changes
+### Branch Naming Convention
 
-- Write clean, readable code
-- Follow the project's coding standards
-- Add tests for new features
+- `feat/feature-name` - New features
+- `fix/bug-description` - Bug fixes
+- `docs/what-changed` - Documentation
+- `refactor/what-changed` - Code refactoring
+- `test/what-added` - Adding tests
+- `chore/what-changed` - Maintenance tasks
+
+### 2. Make Changes
+
+- Write code following our [coding standards](#coding-standards)
+- Add tests for new functionality
 - Update documentation as needed
+- Run linters and tests locally
 
-### 4. Test Your Changes
+### 3. Test Locally
 
 ```bash
-# Run linters
-npm run lint
+# Lint your code
+npm run lint:js        # JavaScript/TypeScript
+npm run lint:py        # Python
+npm run lint          # All
 
-# Format code
-npm run format
+# Fix linting issues
+npm run format:js     # Auto-fix JS/TS
+npm run format:py     # Auto-fix Python
+
+# Build
+npm run build
 
 # Run tests
 npm run test
 
-# Test in Docker
-npm run docker:up
+# Test Docker
+npm run docker:rebuild:up
+npm run docker:logs
 ```
 
-### 5. Commit Your Changes
+### 4. Commit Changes
 
-Follow our [commit guidelines](#commit-guidelines).
-
-### 6. Push to Your Fork
+Follow the [commit guidelines](#commit-guidelines):
 
 ```bash
-git push origin feature/your-feature-name
+git add .
+git commit -m "feat(auth): add social login support"
 ```
 
-### 7. Create a Pull Request
+### 5. Push and Create PR
 
-- Go to your fork on GitHub
-- Click "New Pull Request"
-- Select your feature branch
-- Fill out the PR template
-- Submit the pull request
-
-## Coding Standards
-
-### TypeScript/JavaScript
-
-- **Style Guide**: We use Prettier for code formatting
-- **Linting**: ESLint with TypeScript support
-- **Naming Conventions**:
-  - Use `camelCase` for variables and functions
-  - Use `PascalCase` for components and classes
-  - Use `UPPER_CASE` for constants
-  - Use descriptive names
-
-Example:
-
-```typescript
-// Good
-const fetchUserData = async (userId: string) => { ... }
-const MAX_RETRY_ATTEMPTS = 3
-const UserProfile: React.FC<Props> = ({ user }) => { ... }
-
-// Bad
-const x = async (id) => { ... }
-const retry = 3
-const profile = ({ u }) => { ... }
+```bash
+git push origin feat/your-feature-name
 ```
 
-### Python
-
-- **Style Guide**: PEP 8 with Black formatting
-- **Line Length**: 120 characters
-- **Naming Conventions**:
-  - Use `snake_case` for functions and variables
-  - Use `PascalCase` for classes
-  - Use `UPPER_CASE` for constants
-
-Example:
-
-```python
-# Good
-def fetch_user_data(user_id: str) -> dict:
-    ...
-
-class UserService:
-    MAX_RETRY_ATTEMPTS = 3
-
-# Bad
-def FetchUserData(UserId):
-    ...
-```
-
-### File Organization
-
-#### TypeScript/React
-
-```
-component-name/
-├── index.tsx              # Main component
-├── component-name.test.tsx # Tests
-└── types.ts               # Type definitions (if needed)
-```
-
-#### Python
-
-```
-module_name/
-├── __init__.py
-├── service.py
-└── tests/
-    └── test_service.py
-```
-
-### Import Order
-
-#### TypeScript
-
-```typescript
-// 1. External dependencies
-import React from 'react'
-import { useRouter } from 'next/router'
-
-// 2. Internal packages
-import { Button } from '@proppal/ui'
-import { formatCurrency } from '@proppal/utils'
-
-// 3. Relative imports
-import { UserProfile } from './user-profile'
-import type { User } from './types'
-```
-
-#### Python
-
-```python
-# 1. Standard library
-import os
-from typing import Dict, List
-
-# 2. Third-party packages
-from fastapi import FastAPI
-from pydantic import BaseModel
-
-# 3. Local imports
-from common.utils import format_response
-from services.user import UserService
-```
+Then create a Pull Request on GitHub.
 
 ## Commit Guidelines
 
-We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+We follow [Conventional Commits](https://www.conventionalcommits.org/).
 
-### Commit Message Format
+### Format
 
 ```
-<type>(<scope>): <subject>
+type(scope): description
 
-<body>
+[optional body]
 
-<footer>
+[optional footer]
 ```
 
 ### Types
 
-- `feat`: A new feature
-- `fix`: A bug fix
+- `feat`: New feature
+- `fix`: Bug fix
 - `docs`: Documentation changes
-- `style`: Code style changes (formatting, no code change)
+- `style`: Code style (formatting, etc.)
 - `refactor`: Code refactoring
 - `perf`: Performance improvements
-- `test`: Adding or updating tests
-- `chore`: Maintenance tasks
+- `test`: Adding/updating tests
+- `build`: Build system changes
 - `ci`: CI/CD changes
+- `chore`: Other changes
+
+### Scopes
+
+- `auth` - Authentication
+- `api` - API endpoints
+- `db` - Database
+- `ui` - User interface
+- `docker` - Docker configuration
+- `ci` - CI/CD pipeline
+- `docs` - Documentation
 
 ### Examples
 
 ```bash
-feat(web): add property search functionality
+# Feature
+git commit -m "feat(auth): add Clerk authentication integration"
 
-Implement search component with filters for property type,
-location, and price range.
+# Bug fix
+git commit -m "fix(api): resolve database connection timeout"
 
-Closes #123
+# Documentation
+git commit -m "docs(readme): update installation instructions"
 
----
+# Breaking change
+git commit -m "feat(api): change user schema structure
 
-fix(backend): resolve MongoDB connection timeout
-
-Update connection string to include retry settings.
-
-Fixes #456
-
----
-
-docs: update development setup instructions
-
-Add Docker setup instructions and troubleshooting guide.
+BREAKING CHANGE: User.name is now split into firstName and lastName"
 ```
 
-### Scope
+### Commit Message Rules
 
-The scope should indicate the area of the codebase:
-- `web`: Next.js web app
-- `backend`: FastAPI backend
-- `ui`: UI component package
-- `schemas`: Schemas package
-- `utils`: Utils package
-- `docker`: Docker configuration
-- `ci`: CI/CD pipelines
+✅ **Do:**
+- Use imperative mood ("add" not "added")
+- Start with lowercase (unless proper noun)
+- No period at the end
+- Keep under 72 characters
+- Reference issues when applicable
+
+❌ **Don't:**
+- Use past tense
+- Add unnecessary punctuation
+- Be vague ("fix stuff")
+- Commit broken code
 
 ## Pull Request Process
 
-### PR Checklist
+### Before Creating PR
 
-Before submitting a PR, ensure:
+1. ✅ All tests pass locally
+2. ✅ Code is linted and formatted
+3. ✅ Documentation is updated
+4. ✅ Commits follow guidelines
+5. ✅ Branch is up to date with main
 
-- [ ] Code follows the project's coding standards
-- [ ] All tests pass (`npm run test`)
-- [ ] Linting passes (`npm run lint`)
-- [ ] Code is formatted (`npm run format`)
-- [ ] Documentation is updated
-- [ ] Commit messages follow the guidelines
-- [ ] PR description clearly explains the changes
-- [ ] Related issues are referenced
+### PR Title
 
-### PR Template
+Follow same format as commits:
+
+```
+feat(auth): add social login support
+```
+
+### PR Description Template
 
 ```markdown
 ## Description
-Brief description of the changes
+Brief description of changes
 
 ## Type of Change
 - [ ] Bug fix
@@ -293,68 +239,231 @@ Brief description of the changes
 - [ ] Breaking change
 - [ ] Documentation update
 
-## Related Issues
-Closes #123
-
 ## Testing
-Describe how you tested the changes
-
-## Screenshots (if applicable)
-Add screenshots for UI changes
+How to test these changes
 
 ## Checklist
-- [ ] My code follows the project's coding standards
-- [ ] I have added tests
+- [ ] Code follows style guidelines
+- [ ] Self-review completed
+- [ ] Comments added for complex code
+- [ ] Documentation updated
+- [ ] No new warnings
+- [ ] Tests added/updated
 - [ ] All tests pass
-- [ ] Documentation is updated
+- [ ] Changes are backward compatible (or BREAKING CHANGE noted)
 ```
+
+### PR Size Guidelines
+
+- 🟢 **Small** (< 200 lines): Ideal
+- 🟡 **Medium** (200-500 lines): Acceptable
+- 🟠 **Large** (500-1000 lines): Consider splitting
+- 🔴 **Extra Large** (> 1000 lines): Should be split
 
 ### Review Process
 
-1. **Automated Checks**: CI/CD will run tests and linting
-2. **Code Review**: At least one maintainer must review
-3. **Address Feedback**: Make requested changes
-4. **Approval**: Once approved, a maintainer will merge
+1. **Automated Checks**
+   - CI pipeline must pass
+   - All status checks green
 
-## Project Structure
+2. **Code Review**
+   - At least 1 approval required
+   - Address reviewer feedback
 
-Understanding the monorepo structure:
+3. **Merge**
+   - Squash and merge (preferred)
+   - Rebase and merge (for clean history)
+   - No merge commits
+
+## Coding Standards
+
+### TypeScript/JavaScript
+
+```typescript
+// ✅ Good
+export async function getUserById(id: string): Promise<User> {
+  const user = await db.users.findOne({ id })
+  if (!user) {
+    throw new ResourceNotFoundException('User not found')
+  }
+  return user
+}
+
+// ❌ Bad
+export async function getUser(id) {
+  return await db.users.findOne({ id })
+}
+```
+
+**Rules:**
+- Use TypeScript strict mode
+- Always type function parameters and returns
+- Use async/await over promises
+- Prefer const over let
+- Use meaningful variable names
+- Add JSDoc for complex functions
+
+### Python
+
+```python
+# ✅ Good
+async def get_user_by_id(user_id: str) -> User:
+    """
+    Retrieve user by ID from database.
+    
+    Args:
+        user_id: Unique user identifier
+        
+    Returns:
+        User object if found
+        
+    Raises:
+        ResourceNotFoundException: If user not found
+    """
+    user = await db.users.find_one({"_id": user_id})
+    if not user:
+        raise ResourceNotFoundException(
+            message=f"User {user_id} not found"
+        )
+    return User(**user)
+
+# ❌ Bad
+def getUser(id):
+    return db.users.find_one({"_id": id})
+```
+
+**Rules:**
+- Use type hints (PEP 484)
+- Follow PEP 8 style guide
+- Use Black for formatting
+- Add docstrings (Google style)
+- Use async/await for I/O operations
+- Prefer explicit over implicit
+
+### File Organization
 
 ```
-PropPal/
-├── apps/               # Applications
-│   ├── backend/       # FastAPI backend
-│   └── web/           # Next.js frontend
-├── packages/          # Shared packages
-│   ├── config/       # Shared configs
-│   ├── schemas/      # TypeScript schemas
-│   ├── ui/           # React components
-│   └── utils/        # Utility functions
-├── infra/            # Infrastructure
-│   └── docker/       # Docker configs
-└── scripts/          # Build scripts
+apps/
+├── backend/
+│   ├── common/          # Shared utilities
+│   ├── models/          # Pydantic models
+│   └── services/        # API services
+│       ├── auth/        # Authentication
+│       └── main.py      # Entry point
+├── web/
+│   └── src/
+│       ├── app/         # Next.js app
+│       ├── components/  # React components
+│       └── lib/         # Utilities
+└── packages/
+    └── schemas/         # Shared schemas
 ```
 
-### When to Create a New Package
+## Testing
 
-Create a new package in `packages/` when:
-- Code is shared across multiple apps
-- The code is a self-contained unit
-- It has clear boundaries and responsibilities
+### Writing Tests
 
-### When to Modify an App
+**TypeScript (Jest/Vitest):**
+```typescript
+describe('getUserById', () => {
+  it('should return user when found', async () => {
+    const user = await getUserById('123')
+    expect(user).toBeDefined()
+    expect(user.id).toBe('123')
+  })
+  
+  it('should throw when user not found', async () => {
+    await expect(getUserById('999')).rejects.toThrow()
+  })
+})
+```
 
-Modify code in `apps/` when:
-- It's specific to that application
-- It doesn't need to be shared
-- It's tightly coupled to the app's logic
+**Python (pytest):**
+```python
+@pytest.mark.asyncio
+async def test_get_user_by_id_success():
+    user = await get_user_by_id("123")
+    assert user is not None
+    assert user.id == "123"
+
+@pytest.mark.asyncio
+async def test_get_user_by_id_not_found():
+    with pytest.raises(ResourceNotFoundException):
+        await get_user_by_id("999")
+```
+
+### Running Tests
+
+```bash
+# All tests
+npm run test
+
+# Specific workspace
+npx turbo run test --filter=@proppal/schemas
+
+# Python tests
+cd apps/backend
+pytest
+
+# With coverage
+pytest --cov=.
+```
+
+## Documentation
+
+### Code Documentation
+
+**Add comments for:**
+- Complex algorithms
+- Non-obvious solutions
+- TODO items with context
+- Public APIs
+
+**Don't comment:**
+- Obvious code
+- Every line
+- Instead of good naming
+
+### API Documentation
+
+FastAPI auto-generates OpenAPI docs:
+```python
+@app.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: str,
+    include_posts: bool = False
+):
+    """
+    Get user by ID.
+    
+    - **user_id**: Unique user identifier
+    - **include_posts**: Whether to include user's posts
+    
+    Returns user object with optional posts.
+    """
+    ...
+```
+
+### README Updates
+
+Update README when:
+- Adding new features
+- Changing setup process
+- Adding dependencies
+- Modifying architecture
 
 ## Questions?
 
-If you have questions:
-1. Check the [Development Guide](./DEVELOPMENT.md)
-2. Search existing [GitHub Issues](https://github.com/bilalrana8718/PropPal/issues)
-3. Create a new issue with the `question` label
+- 💬 **Discussion**: Start a [GitHub Discussion](https://github.com/bilalrana8718/PropPal/discussions)
+- 🐛 **Bug**: Create an [issue](https://github.com/bilalrana8718/PropPal/issues)
+- 📧 **Email**: Contact maintainers
 
-Thank you for contributing to PropPal! 🏠✨
+## Recognition
+
+Contributors will be:
+- Added to CONTRIBUTORS.md
+- Mentioned in release notes
+- Acknowledged in documentation
+
+Thank you for contributing to PropPal! 🎉
 

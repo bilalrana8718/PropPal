@@ -22,6 +22,10 @@
     "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
     "docker:down": "docker compose -f infra/docker/docker-compose.yml down",
     "docker:logs": "docker compose -f infra/docker/docker-compose.yml logs -f",
+    "docker:restart": "docker compose -f infra/docker/docker-compose.yml restart",
+    "docker:rebuild": "docker compose -f infra/docker/docker-compose.yml build --no-cache",
+    "docker:rebuild:gateway": "docker compose -f infra/docker/docker-compose.yml build --no-cache gateway",
+    "docker:rebuild:up": "npm run docker:rebuild && npm run docker:up",
     "setup": "npm install && cd apps/backend && pip install -r requirements.txt"
   },
   "repository": {

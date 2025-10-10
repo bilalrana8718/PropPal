@@ -9,7 +9,7 @@ Main FastAPI application using the common utilities for:
 
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +29,12 @@ from common.errors import (
     ResourceNotFoundException,
     DatabaseConnectionException
 )
+
+# Import auth module (handle both local and Docker paths)
+try:
+    from auth import get_current_user, AuthenticatedUser
+except ModuleNotFoundError:
+    from services.auth import get_current_user, AuthenticatedUser
 
 
 @asynccontextmanager
@@ -256,6 +262,79 @@ async def chat(query: Dict[str, str]):
         "nlp_service": settings.NLP_SERVICE_URL,
         "timestamp": datetime.utcnow().isoformat(),
         "note": "This is a placeholder. NLP integration coming soon."
+    }
+
+
+# =====================================================================
+# Protected Endpoints (Authentication Required)
+# =====================================================================
+
+@app.get("/auth/me")
+async def get_current_user_info(
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Get current authenticated user information.
+    
+    This endpoint requires a valid Clerk JWT token in the Authorization header.
+    """
+    return {
+        "user_id": user.user_id,
+        "email": user.email,
+        "role": user.role,
+        "session_id": user.session_id,
+        "org_id": user.org_id,
+        "public_metadata": user.public_metadata,
+        "authenticated": True
+    }
+
+
+@app.get("/auth/protected")
+async def protected_route(
+    user: AuthenticatedUser = Depends(get_current_user)
+):
+    """
+    Example protected endpoint.
+    
+    Demonstrates how to protect an endpoint with Clerk authentication.
+    """
+    return {
+        "message": f"Hello, {user.email or user.user_id}!",
+        "access_granted": True,
+        "your_role": user.role,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@app.post("/properties/create")
+async def create_property_example(
+    property_data: Dict[str, Any],
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Example endpoint showing authenticated property creation.
+    
+    Demonstrates how to use both authentication and database dependencies.
+    """
+    
+    # Add user context to the property
+    property_with_user = {
+        **property_data,
+        "created_by": user.user_id,
+        "created_at": datetime.utcnow(),
+        "user_email": user.email
+    }
+    
+    # In a real implementation, you would validate and save to database
+    return {
+        "status": "success",
+        "message": "Property creation endpoint (example)",
+        "property": property_with_user,
+        "authenticated_user": {
+            "user_id": user.user_id,
+            "role": user.role
+        }
     }
 
 
