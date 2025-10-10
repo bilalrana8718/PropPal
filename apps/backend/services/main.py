@@ -12,7 +12,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,9 +21,13 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 # Add parent directory to path to import common module
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from common.config import Settings, get_settings
-from common.db import DatabaseClient, get_database, get_db_client
-from common.errors import DatabaseConnectionException, ResourceNotFoundException, register_exception_handlers
+from common.config import get_settings  # noqa: E402
+from common.db import DatabaseClient, get_database, get_db_client  # noqa: E402
+from common.errors import (  # noqa: E402
+    DatabaseConnectionException,
+    ResourceNotFoundException,
+    register_exception_handlers,
+)
 
 # Import auth module (handle both local and Docker paths)
 try:

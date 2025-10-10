@@ -1,57 +1,57 @@
 # Auto-labeling configuration for PRs based on changed files
 
 # Frontend labels
-'frontend':
+frontend:
   - apps/web/**/*
   - apps/mobile/**/*
 
-'frontend:web':
+frontend:web:
   - apps/web/**/*
 
-'frontend:mobile':
+frontend:mobile:
   - apps/mobile/**/*
 
 # Backend labels
-'backend':
+backend:
   - apps/backend/**/*
 
-'backend:api':
+backend:api:
   - apps/backend/services/**/*
 
-'backend:models':
+backend:models:
   - apps/backend/models/**/*
 
-'backend:auth':
+backend:auth:
   - apps/backend/services/auth/**/*
 
 # Infrastructure
-'infra':
+infra:
   - infra/**/*
   - .github/**/*
   - Dockerfile
   - docker-compose.yml
 
-'infra:docker':
+infra:docker:
   - infra/docker/**/*
   - '**/Dockerfile'
 
-'infra:ci':
+infra:ci:
   - .github/workflows/**/*
 
 # Packages
-'packages':
+packages:
   - packages/**/*
 
-'packages:schemas':
+packages:schemas:
   - packages/schemas/**/*
 
 # Documentation
-'documentation':
+documentation:
   - '**/*.md'
   - docs/**/*
 
 # Configuration
-'config':
+config:
   - '**/*.json'
   - '**/*.yml'
   - '**/*.yaml'
@@ -59,7 +59,7 @@
   - '**/*.config.*'
 
 # Dependencies
-'dependencies':
+dependencies:
   - package.json
   - package-lock.json
   - requirements.txt
@@ -67,23 +67,22 @@
   - apps/**/requirements.txt
 
 # Tests
-'tests':
+tests:
   - '**/*.test.*'
   - '**/*.spec.*'
   - '**/tests/**/*'
   - apps/backend/tests/**/*
 
 # Python
-'python':
+python:
   - '**/*.py'
   - '**/*.pyi'
 
 # TypeScript/JavaScript
-'typescript':
+typescript:
   - '**/*.ts'
   - '**/*.tsx'
 
-'javascript':
+javascript:
   - '**/*.js'
   - '**/*.jsx'
-
