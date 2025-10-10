@@ -34,7 +34,7 @@ export default async function DashboardPage() {
             Welcome, {user?.firstName || 'User'}!
           </h2>
           <p className="mt-1 text-gray-600">
-            You're successfully authenticated with Clerk.
+            You&apos;re successfully authenticated with Clerk.
           </p>
         </div>
 

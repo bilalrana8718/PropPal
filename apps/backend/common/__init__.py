@@ -10,8 +10,8 @@ This package provides shared functionality across all backend services:
 from .config import Settings, get_settings
 from .db import DatabaseClient, get_db_client
 from .errors import (
-    ResourceNotFoundException,
     AuthenticationFailedException,
+    ResourceNotFoundException,
     ValidationErrorException,
     register_exception_handlers,
 )
@@ -26,4 +26,3 @@ __all__ = [
     "ValidationErrorException",
     "register_exception_handlers",
 ]
-

@@ -8,47 +8,35 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
+# Import all models
+from models import (  # Users; Properties; Property Amenities; Builder Profiles; Builder Services; User Projects; Builder Bids; Visits; Projects; Query Logs; Chat Histories
+    BuilderBidCreate,
+    BuilderBidResponse,
+    BuilderProfileCreate,
+    BuilderProfileResponse,
+    BuilderServiceCreate,
+    BuilderServiceResponse,
+    ChatHistoryCreate,
+    ChatHistoryResponse,
+    ChatMessage,
+    ProjectCreate,
+    ProjectResponse,
+    PropertyAmenityCreate,
+    PropertyAmenityResponse,
+    PropertyCreate,
+    PropertyResponse,
+    QueryLogCreate,
+    QueryLogResponse,
+    UserCreate,
+    UserProjectCreate,
+    UserProjectResponse,
+    UserResponse,
+    VisitCreate,
+    VisitResponse,
+)
 from pydantic import BaseModel
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaValue
 from pydantic_core import core_schema
-
-# Import all models
-from models import (
-    # Users
-    UserResponse,
-    UserCreate,
-    # Properties
-    PropertyResponse,
-    PropertyCreate,
-    # Property Amenities
-    PropertyAmenityResponse,
-    PropertyAmenityCreate,
-    # Builder Profiles
-    BuilderProfileResponse,
-    BuilderProfileCreate,
-    # Builder Services
-    BuilderServiceResponse,
-    BuilderServiceCreate,
-    # User Projects
-    UserProjectResponse,
-    UserProjectCreate,
-    # Builder Bids
-    BuilderBidResponse,
-    BuilderBidCreate,
-    # Visits
-    VisitResponse,
-    VisitCreate,
-    # Projects
-    ProjectResponse,
-    ProjectCreate,
-    # Query Logs
-    QueryLogResponse,
-    QueryLogCreate,
-    # Chat Histories
-    ChatHistoryResponse,
-    ChatHistoryCreate,
-    ChatMessage,
-)
 
 
 def pydantic_to_ts_type(python_type: str) -> str:
@@ -65,9 +53,7 @@ def pydantic_to_ts_type(python_type: str) -> str:
     return type_mapping.get(python_type, "any")
 
 
-def json_schema_to_ts_interface(
-    name: str, schema: Dict[str, Any], indent: int = 0
-) -> str:
+def json_schema_to_ts_interface(name: str, schema: Dict[str, Any], indent: int = 0) -> str:
     """Convert JSON schema to TypeScript interface"""
     lines = []
     ind = "  " * indent
@@ -120,10 +106,7 @@ def json_schema_to_ts_interface(
             ts_type = "string"
         # Handle anyOf (union types)
         elif "anyOf" in prop_schema:
-            types = [
-                pydantic_to_ts_type(t.get("type", "any"))
-                for t in prop_schema["anyOf"]
-            ]
+            types = [pydantic_to_ts_type(t.get("type", "any")) for t in prop_schema["anyOf"]]
             ts_type = " | ".join(types)
         else:
             ts_type = pydantic_to_ts_type(prop_type)
@@ -213,4 +196,3 @@ def generate_typescript_interfaces():
 
 if __name__ == "__main__":
     generate_typescript_interfaces()
-

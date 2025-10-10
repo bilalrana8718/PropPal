@@ -25,7 +25,7 @@ export default async function Home() {
           {userId ? (
             <div className="space-y-4">
               <p className="text-lg text-gray-700">
-                Welcome back! You're already signed in.
+                Welcome back! You&apos;re already signed in.
               </p>
               <Link
                 href="/dashboard"

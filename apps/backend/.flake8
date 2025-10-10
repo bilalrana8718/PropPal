@@ -1,8 +1,7 @@
-﻿[flake8]
+[flake8]
 exclude = 
     venv,
     .venv,
-    ./venv,
     */venv/*,
     **/venv/**,
     .git,
@@ -12,9 +11,11 @@ exclude =
     .eggs,
     .mypy_cache,
     .tox,
-    */site-packages/*
+    */site-packages/*,
+    venv/Lib/site-packages
 max-line-length = 120
 max-complexity = 10
 extend-ignore = E203, W503
 # E203: whitespace before ':' (conflicts with black)
 # W503: line break before binary operator (conflicts with black)
+

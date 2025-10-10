@@ -14,55 +14,51 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 class DatabaseClient:
     """
     Singleton-style database client manager.
-    
+
     Stores the active MongoDB client instance and provides
     access to the database throughout the application lifecycle.
     """
-    
+
     client: Optional[AsyncIOMotorClient] = None
     database: Optional[AsyncIOMotorDatabase] = None
-    
+
     @classmethod
     def get_client(cls) -> AsyncIOMotorClient:
         """
         Get the MongoDB client instance.
-        
+
         Returns:
             AsyncIOMotorClient: The active MongoDB client
-            
+
         Raises:
             HTTPException: If client is not initialized
         """
         if cls.client is None:
             raise HTTPException(
-                status_code=500,
-                detail="Database client not initialized. Ensure lifespan context is running."
+                status_code=500, detail="Database client not initialized. Ensure lifespan context is running."
             )
         return cls.client
-    
+
     @classmethod
     def get_database(cls) -> AsyncIOMotorDatabase:
         """
         Get the MongoDB database instance.
-        
+
         Returns:
             AsyncIOMotorDatabase: The active database instance
-            
+
         Raises:
             HTTPException: If database is not initialized
         """
         if cls.database is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Database not initialized. Ensure lifespan context is running."
-            )
+            raise HTTPException(status_code=500, detail="Database not initialized. Ensure lifespan context is running.")
         return cls.database
 
 
 async def get_db_client() -> AsyncIOMotorClient:
     """
     FastAPI dependency to inject the MongoDB client.
-    
+
     Usage:
         ```python
         @app.get("/items")
@@ -71,10 +67,10 @@ async def get_db_client() -> AsyncIOMotorClient:
             items = await db.items.find().to_list(100)
             return items
         ```
-    
+
     Returns:
         AsyncIOMotorClient: The active MongoDB client
-        
+
     Raises:
         HTTPException: If client is not initialized
     """
@@ -84,7 +80,7 @@ async def get_db_client() -> AsyncIOMotorClient:
 async def get_database() -> AsyncIOMotorDatabase:
     """
     FastAPI dependency to inject the MongoDB database.
-    
+
     Usage:
         ```python
         @app.get("/items")
@@ -92,12 +88,11 @@ async def get_database() -> AsyncIOMotorDatabase:
             items = await db.items.find().to_list(100)
             return items
         ```
-    
+
     Returns:
         AsyncIOMotorDatabase: The active database instance
-        
+
     Raises:
         HTTPException: If database is not initialized
     """
     return DatabaseClient.get_database()
-
