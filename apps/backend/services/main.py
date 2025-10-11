@@ -35,11 +35,16 @@ try:
 except ModuleNotFoundError:
     from services.auth import AuthenticatedUser, get_current_user
 
-# Import webhook router
+# Import user sync middleware
 try:
-    from services.webhooks import router as webhook_router
+    from common.user_sync import get_synced_user
 except ModuleNotFoundError:
-    from webhooks import router as webhook_router
+    from services.common.user_sync import get_synced_user
+
+# Import User model for type hints (using string type hints to avoid circular imports)
+# User will be imported locally in functions that need it
+
+# Webhook router removed - using user sync on API requests instead
 
 
 @asynccontextmanager
@@ -264,34 +269,45 @@ async def chat(query: Dict[str, str]):
 
 
 @app.get("/auth/me")
-async def get_current_user_info(user: AuthenticatedUser = Depends(get_current_user)):
+async def get_current_user_info(user: "User" = Depends(get_synced_user)):
     """
     Get current authenticated user information.
-
-    This endpoint requires a valid Clerk JWT token in the Authorization header.
+    
+    This endpoint automatically syncs user data from Clerk to MongoDB.
+    Requires a valid Clerk JWT token in the Authorization header.
     """
     return {
-        "user_id": user.user_id,
+        "user_id": str(user.id),
+        "clerk_user_id": user.clerk_user_id,
+        "name": user.name,
         "email": user.email,
+        "phone": user.phone,
         "role": user.role,
-        "session_id": user.session_id,
-        "org_id": user.org_id,
-        "public_metadata": user.public_metadata,
+        "profile_image": user.profile_image,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "updated_at": user.updated_at.isoformat() if user.updated_at else None,
         "authenticated": True,
     }
 
 
 @app.get("/auth/protected")
-async def protected_route(user: AuthenticatedUser = Depends(get_current_user)):
+async def protected_route(user: "User" = Depends(get_synced_user)):
     """
     Example protected endpoint.
-
+    
     Demonstrates how to protect an endpoint with Clerk authentication.
+    This endpoint automatically syncs user data from Clerk to MongoDB.
     """
     return {
-        "message": f"Hello, {user.email or user.user_id}!",
+        "message": f"Hello, {user.name or user.email}!",
         "access_granted": True,
         "your_role": user.role,
+        "user_info": {
+            "user_id": str(user.id),
+            "clerk_user_id": user.clerk_user_id,
+            "name": user.name,
+            "email": user.email,
+        },
         "timestamp": datetime.utcnow().isoformat(),
     }
 
@@ -299,19 +315,21 @@ async def protected_route(user: AuthenticatedUser = Depends(get_current_user)):
 @app.post("/properties/create")
 async def create_property_example(
     property_data: Dict[str, Any],
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: "User" = Depends(get_synced_user),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
     Example endpoint showing authenticated property creation.
-
+    
     Demonstrates how to use both authentication and database dependencies.
+    This endpoint automatically syncs user data from Clerk to MongoDB.
     """
 
     # Add user context to the property
     property_with_user = {
         **property_data,
-        "created_by": user.user_id,
+        "created_by": str(user.id),
+        "clerk_user_id": user.clerk_user_id,
         "created_at": datetime.utcnow(),
         "user_email": user.email,
     }
@@ -321,7 +339,13 @@ async def create_property_example(
         "status": "success",
         "message": "Property creation endpoint (example)",
         "property": property_with_user,
-        "authenticated_user": {"user_id": user.user_id, "role": user.role},
+        "authenticated_user": {
+            "user_id": str(user.id),
+            "clerk_user_id": user.clerk_user_id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role
+        },
     }
 
 
@@ -329,8 +353,8 @@ async def create_property_example(
 # Include Routers
 # =====================================================================
 
-# Include webhook router for Clerk integration
-app.include_router(webhook_router)
+# Webhook router removed - using user sync on API requests instead
+# Users are automatically synced to MongoDB when they make authenticated requests
 
 
 # =====================================================================

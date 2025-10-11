@@ -254,24 +254,19 @@ async def get_current_user(
     if "role" in payload:
         role = payload["role"]
 
-    # Fetch internal user from database
-    user_repository = get_user_repository(db)
-    internal_user = await user_repository.get_user_by_clerk_id(clerk_user_id)
+        # Note: We don't fetch internal user here anymore
+        # User sync will be handled by the sync_user_from_clerk middleware
+        # This keeps the authentication dependency lightweight and fast
 
-    # If internal user exists, use their role from the database
-    if internal_user:
-        role = internal_user.role
-        email = internal_user.email  # Use email from database as source of truth
-
-    return AuthenticatedUser(
-        clerk_user_id=clerk_user_id,
-        email=email,
-        role=role,
-        session_id=session_id,
-        org_id=org_id,
-        public_metadata=public_metadata,
-        internal_user=internal_user
-    )
+        return AuthenticatedUser(
+            clerk_user_id=clerk_user_id,
+            email=email,
+            role=role,
+            session_id=session_id,
+            org_id=org_id,
+            public_metadata=public_metadata,
+            internal_user=None  # Will be populated by sync middleware
+        )
 
 
 # Optional: Dependency for specific roles
