@@ -25,6 +25,7 @@ from common.errors import register_exception_handlers, DatabaseConnectionExcepti
 from api.users.router import router as users_router  # noqa: E402
 from api.search.router import router as search_router  # noqa: E402
 from api.chat.router import router as chat_router  # noqa: E402
+from api.builder.router import router as builder_router
 
 
 @asynccontextmanager
@@ -88,6 +89,7 @@ register_exception_handlers(app)
 app.include_router(users_router)
 app.include_router(search_router)
 app.include_router(chat_router)
+app.include_router(builder_router)
 
 # CORS Configuration
 app.add_middleware(
