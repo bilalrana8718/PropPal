@@ -39,6 +39,7 @@ class ChatResponse(BaseModel):
     classification: str = Field(..., description="The classification of the query (listing_agent, general_chat, etc.)")
     error: Optional[str] = Field(None, description="Error message if any")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the response")
+    properties: Optional[list] = Field(None, description="Property results if available from listing agent")
 
 
 class HealthResponse(BaseModel):
@@ -104,13 +105,17 @@ async def send_message(request: ChatRequest):
             "agent_type": result.get("classification", "unknown")
         }
         
+        # Extract properties if available (from ListingAgent)
+        properties = result.get("properties", [])
+        
         # Return the response
         return ChatResponse(
             success=True,
             response=result.get("response", "No response generated"),
             classification=result.get("classification", "unknown"),
             error=None,
-            metadata=metadata
+            metadata=metadata,
+            properties=properties if properties else None
         )
         
     except HTTPException:

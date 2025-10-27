@@ -31,6 +31,9 @@ class RouterState(TypedDict):
     # The list of messages (conversation history)
     # operator.add allows us to append messages to this list
     messages: Annotated[List[BaseMessage], operator.add]
+    
+    # Properties returned from ListingAgent (if any)
+    properties: list
 
 # --- LLM and Router Definition ---
 
@@ -120,7 +123,10 @@ def general_chat_node(state: RouterState):
     chain = prompt | llm
     result = chain.invoke({"query": query})
     
-    return {"messages": [result]}
+    return {
+        "messages": [result],
+        "properties": []  # General chat doesn't return properties
+    }
 
 def listing_agent_node(state: RouterState):
     """
@@ -144,8 +150,15 @@ def listing_agent_node(state: RouterState):
     if not result.get("success"):
         print(f"--- [Main Graph] Listing Agent Error: {result.get('error')}")
         # Even if it fails, we pass the error message back to the user
+    
+    # Extract properties from the listing agent result
+    properties = result.get("properties", [])
+    print(f"--- [Main Graph] Listing Agent returned {len(properties)} properties ---")
         
-    return {"messages": [AIMessage(content=response_message)]}
+    return {
+        "messages": [AIMessage(content=response_message)],
+        "properties": properties
+    }
 
 # --- Conditional Routing Function ---
 
@@ -219,13 +232,14 @@ class RouterAgent:
             query: The user's query string
             
         Returns:
-            dict: Response containing success, response, and metadata
+            dict: Response containing success, response, classification, properties, and error
         """
         if not query or not query.strip():
             return {
                 "success": False,
                 "response": "Please provide a valid query.",
-                "error": "Empty query provided"
+                "error": "Empty query provided",
+                "properties": []
             }
         
         try:
@@ -233,7 +247,8 @@ class RouterAgent:
             initial_state = RouterState(
                 query=query.strip(),
                 classification="",
-                messages=[]
+                messages=[],
+                properties=[]
             )
             
             # Run the router workflow
@@ -250,7 +265,8 @@ class RouterAgent:
                 "success": True,
                 "response": response_content,
                 "classification": final_state.get("classification", "unknown"),
-                "error": None
+                "error": None,
+                "properties": final_state.get("properties", [])
             }
             
         except Exception as e:
@@ -258,5 +274,6 @@ class RouterAgent:
                 "success": False,
                 "response": f"An error occurred while processing your query: {str(e)}",
                 "classification": "error",
-                "error": str(e)
+                "error": str(e),
+                "properties": []
             }
