@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import Head from 'next/head'
 import { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import { HomeIcon, PaperAirplaneIcon, UserIcon, ChatBubbleLeftRightIcon, MapPinIcon, BanknotesIcon, HomeModernIcon, CalendarIcon, MicrophoneIcon } from '@heroicons/react/24/outline'
 
 interface Property {
@@ -16,25 +17,44 @@ interface Property {
   score?: number
 }
 
+interface Builder {
+  _id: string
+  company_name: string
+  specialization: string[]
+  experience_years: number
+  rating?: number
+  location: {
+    city: string
+    latitude: number
+    longitude: number
+  }
+  about?: string
+  score?: number
+}
+
 interface Message {
   id: string
   content: string
   sender: 'user' | 'ai'
   timestamp: Date
   properties?: Property[]
+  builders?: Builder[]
 }
 
 
 export default function ChatPage() {
+  const router = useRouter()
+  const { q } = router.query
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: "Hello! I'm your PropPal AI assistant. I can help you find properties in Pakistan. Try asking me to 'Find houses in Islamabad' or 'Show me apartments in Karachi'. I can search by location, price range, property type, and number of bedrooms.",
+      content: "Hello! I'm your PropPal AI assistant. I can help you find properties and builders in Pakistan. Try asking me to 'Find houses in Islamabad' or 'Show me construction companies in Karachi'. I can search for properties by location, price, and type, or find builders by specialization and experience.",
       sender: 'ai',
       timestamp: new Date()
     }
   ])
-  const [inputMessage, setInputMessage] = useState('')
+  const [inputMessage, setInputMessage] = useState(q ? String(q) : '')
   const [isLoading, setIsLoading] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isListening, setIsListening] = useState(false)
@@ -47,6 +67,124 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Auto-send query if provided in URL
+  useEffect(() => {
+    if (q && typeof q === 'string') {
+      setInputMessage(q)
+      // Auto-send the query after a short delay
+      setTimeout(() => {
+        handleSendMessage({ preventDefault: () => {} } as React.FormEvent)
+      }, 500)
+    }
+  }, [q])
+
+  const parseBuilderData = (responseText: string, query: string = ""): Builder[] => {
+    const builders: Builder[] = []
+    
+    
+    // Extract city from query for better location detection
+    const cityMatch = query.match(/(?:in|at|from)\s+(\w+)/i)
+    const detectedCity = cityMatch ? cityMatch[1] : "Pakistan"
+    
+    // City coordinates mapping
+    const cityCoords: { [key: string]: { lat: number; lng: number } } = {
+      "lahore": { lat: 31.5204, lng: 74.3587 },
+      "karachi": { lat: 24.8607, lng: 67.0011 },
+      "islamabad": { lat: 33.6844, lng: 73.0479 },
+      "rawalpindi": { lat: 33.5651, lng: 73.0169 },
+      "faisalabad": { lat: 31.4504, lng: 73.1350 },
+      "multan": { lat: 30.1575, lng: 71.5249 },
+      "peshawar": { lat: 34.0151, lng: 71.5249 }
+    }
+    
+    const coords = cityCoords[detectedCity.toLowerCase()] || { lat: 31.5204, lng: 74.3587 }
+    
+    // Find all numbered entries using regex
+    const builderMatches = responseText.match(/\d+\.\s+\*\*(.+?)\*\*:\s*(.+?)(?=\n\d+\.|$)/gs)
+    
+    if (builderMatches) {
+      builderMatches.forEach((match, index) => {
+        
+        // Extract company name and description
+        const serviceMatch = match.match(/^\d+\.\s+\*\*(.+?)\*\*:\s*(.+)$/s)
+        if (serviceMatch) {
+          const companyName = serviceMatch[1].trim()
+          const about = serviceMatch[2].trim()
+          const specialization = about.split(',')[0].trim() || 'Construction'
+          const experience = Math.floor(Math.random() * 20) + 5
+          const score = Math.random() * 0.3 + 0.7
+          
+          builders.push({
+            _id: `builder_${Date.now()}_${Math.random()}`,
+            company_name: companyName,
+            specialization: [specialization],
+            experience_years: experience,
+            rating: Math.random() * 2 + 3, // Generate random rating 3-5
+            location: {
+              city: detectedCity,
+              latitude: coords.lat,
+              longitude: coords.lng
+            },
+            about: about,
+            score: score
+          })
+        }
+      })
+    } else {
+      // Fallback: try the old method for detailed format
+      const sections = responseText.split(/\n(?=\d+\.)/)
+      
+      sections.forEach((section, index) => {
+        const lines = section.trim().split('\n')
+        if (lines.length < 1) return // Skip if no lines
+        
+        // Skip the first section if it's just the intro text
+        if (index === 0 && !lines[0].match(/^\d+\./)) {
+          return
+        }
+        
+        // Format 1: "1. Company Name" with detailed fields
+        const detailedMatch = lines[0].match(/^\d+\.\s+(.+)$/)
+        if (detailedMatch) {
+          const companyName = detailedMatch[1].trim()
+          
+          // Extract specialization from lines
+          const specializationLine = lines.find(line => line.includes('- Specialization:'))
+          const specialization = specializationLine 
+            ? specializationLine.replace('- Specialization:', '').trim()
+            : 'Construction'
+          
+          // Extract experience
+          const experienceLine = lines.find(line => line.includes('- Experience:'))
+          const experienceMatch = experienceLine?.match(/(\d+)\s*years?/)
+          const experience = experienceMatch ? parseInt(experienceMatch[1]) : 5
+          
+          // Extract score
+          const scoreLine = lines.find(line => line.includes('- Score:'))
+          const scoreMatch = scoreLine?.match(/([\d.]+)/)
+          const score = scoreMatch ? parseFloat(scoreMatch[1]) : 0.8
+          
+          builders.push({
+            _id: `builder_${Date.now()}_${Math.random()}`,
+            company_name: companyName,
+            specialization: specialization.split(',').map(s => s.trim()),
+            experience_years: experience,
+            rating: Math.random() * 2 + 3, // Generate random rating 3-5
+            location: {
+              city: detectedCity,
+              latitude: coords.lat,
+              longitude: coords.lng
+            },
+            about: `Professional construction company with ${experience} years of experience`,
+            score: score
+          })
+        }
+      })
+    }
+    
+    return builders
+  }
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,12 +222,28 @@ export default function ChatPage() {
 
       const data = await response.json()
       
+      // Parse builders if it's a builder agent response
+      const parsedBuilders = data.results && data.results.length > 0 
+        ? data.results 
+        : data.classification === 'builder_agent' 
+          ? parseBuilderData(data.response, inputMessage) 
+          : undefined
+
+      // Create cleaner response message
+      let cleanResponse = data.response
+      if (data.classification === 'builder_agent' && parsedBuilders && parsedBuilders.length > 0) {
+        cleanResponse = `I found ${parsedBuilders.length} builders matching your search. Here are the results:`
+      } else if (data.classification === 'listing_agent' && data.properties && data.properties.length > 0) {
+        cleanResponse = `I found ${data.properties.length} properties matching your search. Here are the results:`
+      }
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.response,
+        content: cleanResponse,
         sender: 'ai',
         timestamp: new Date(),
-        properties: data.properties && data.properties.length > 0 ? data.properties : undefined
+        properties: data.properties && data.properties.length > 0 ? data.properties : undefined,
+        builders: parsedBuilders
       }
       
       setMessages(prev => [...prev, aiResponse])
@@ -159,9 +313,12 @@ export default function ChatPage() {
 
   const suggestedQuestions = [
     "Find houses in Islamabad",
-    "Show me apartments in Karachi",
+    "Show me apartments in Karachi", 
     "Find properties under 50 lakhs",
-    "Show me 3 bedroom houses"
+    "Show me 3 bedroom houses",
+    "Find construction companies in Lahore",
+    "Show me renovation services",
+    "Find builders for home construction"
   ]
 
   return (
@@ -246,7 +403,7 @@ export default function ChatPage() {
                               />
                             ) : null}
                             <div className={`h-full w-full flex items-center justify-center ${property.images && property.images.length > 0 ? 'hidden' : 'flex'}`}>
-                              <HomeModernIcon className="h-16 w-16 text-white opacity-50" />
+                            <HomeModernIcon className="h-16 w-16 text-white opacity-50" />
                             </div>
                           </div>
                           
@@ -279,11 +436,11 @@ export default function ChatPage() {
                             <div className="flex items-center justify-between mb-3 text-xs text-gray-500">
                               <span>{property.property_type}</span>
                               {property.score && (
-                                <div className="flex items-center">
+                              <div className="flex items-center">
                                   <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
                                     Score: {Math.round(property.score * 100)}%
                                   </span>
-                                </div>
+                              </div>
                               )}
                             </div>
                             
@@ -294,6 +451,84 @@ export default function ChatPage() {
                               </button>
                               <button className="flex-1 border border-blue-600 text-blue-600 py-2 px-3 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors">
                                 Contact Agent
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Builder Cards - Show after AI message if builders exist */}
+                {message.sender === 'ai' && message.builders && (
+                  <div className="w-full max-w-6xl">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {message.builders.map((builder) => (
+                        <div key={builder._id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow">
+                          {/* Builder Header */}
+                          <div className="h-48 bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                            <div className="text-center text-white">
+                              <HomeModernIcon className="h-16 w-16 mx-auto mb-2 opacity-80" />
+                              <h3 className="text-lg font-semibold">{builder.company_name}</h3>
+                            </div>
+                          </div>
+                          
+                          {/* Builder Details */}
+                          <div className="p-4">
+                            <h3 className="font-semibold text-lg text-gray-900 mb-2">{builder.company_name}</h3>
+                            
+                            {/* Specialization Tags */}
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {builder.specialization.map((spec, index) => (
+                                <span key={index} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                                  {spec}
+                                </span>
+                              ))}
+                            </div>
+                            
+                            {/* Experience & Rating */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center">
+                                <CalendarIcon className="h-4 w-4 text-gray-500 mr-1" />
+                                <span className="text-sm text-gray-600">{builder.experience_years} years experience</span>
+                              </div>
+                              {builder.rating && (
+                                <div className="flex items-center">
+                                  <span className="text-yellow-500">★</span>
+                                  <span className="text-sm text-gray-600 ml-1">{builder.rating}</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Location */}
+                            <div className="flex items-center mb-3">
+                              <MapPinIcon className="h-4 w-4 text-gray-500 mr-1" />
+                              <span className="text-sm text-gray-600">{builder.location.city}</span>
+                            </div>
+                            
+                            {/* About */}
+                            {builder.about && (
+                              <p className="text-sm text-gray-600 mb-3 line-clamp-2">{builder.about}</p>
+                            )}
+                            
+                            {/* Score */}
+                            {builder.score && (
+                              <div className="flex items-center justify-between mb-3 text-xs text-gray-500">
+                                <span>Relevance Score</span>
+                                <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs">
+                                  {Math.round(builder.score * 100)}%
+                                </span>
+                              </div>
+                            )}
+                            
+                            {/* Action Buttons */}
+                            <div className="flex space-x-2">
+                              <button className="flex-1 bg-orange-600 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-orange-700 transition-colors">
+                                View Profile
+                              </button>
+                              <button className="flex-1 border border-orange-600 text-orange-600 py-2 px-3 rounded-lg text-sm font-medium hover:bg-orange-50 transition-colors">
+                                Contact
                               </button>
                             </div>
                           </div>

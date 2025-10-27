@@ -28,9 +28,6 @@ export default function HomePage() {
             <div className="hidden md:flex space-x-8 text-white">
               <Link href="#" className="hover:text-blue-300 transition-colors">Home</Link>
               <Link href="#" className="hover:text-blue-300 transition-colors">Properties</Link>
-              <Link href="/chat" className="hover:text-blue-300 transition-colors">AI Chat</Link>
-              <Link href="/builders" className="hover:text-blue-300 transition-colors">Find Builders</Link>
-              <Link href="/builder" className="hover:text-blue-300 transition-colors">Builder Portal</Link>
               <Link href="#" className="hover:text-blue-300 transition-colors">About</Link>
               <Link href="#" className="hover:text-blue-300 transition-colors">Contact</Link>
             </div>
@@ -59,13 +56,13 @@ export default function HomePage() {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
               <Link 
-                href="/signup"
+                href="/sign-up"
                 className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-4 rounded-xl text-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
               >
                 Get Started
               </Link>
               <Link 
-                href="/login"
+                href="/sign-in"
                 className="bg-white/10 hover:bg-white/20 text-white px-8 py-4 rounded-xl text-lg font-semibold transition-all duration-300 backdrop-blur-sm border border-white/20 hover:border-white/30"
               >
                 Already have an account? Login
@@ -146,7 +143,7 @@ export default function HomePage() {
               Join thousands of satisfied users who have found their perfect home with PropPal.
             </p>
             <Link 
-              href="/signup"
+              href="/sign-up"
               className="inline-block bg-white text-blue-600 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-gray-100 transition-colors shadow-lg hover:shadow-xl transform hover:scale-105"
             >
               Start Your Journey Today
@@ -193,7 +190,7 @@ export default function HomePage() {
               </div>
             </div>
             <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-              <p>&copy; 2024 PropPal. All rights reserved.</p>
+              <p>&copy; 2025 PropPal. All rights reserved.</p>
             </div>
           </div>
         </footer>

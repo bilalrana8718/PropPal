@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import Head from 'next/head'
 import { useState } from 'react'
+import { useRouter } from 'next/router'
 import { HomeIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
@@ -12,8 +14,11 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement login logic
+    // TODO: Implement actual login logic
     console.log('Login attempt:', formData)
+    
+    // For now, redirect to buyer dashboard
+    router.push('/buyer')
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
