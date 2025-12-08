@@ -185,9 +185,12 @@ export default function PropertyDetailPage({ property }: { property: Property })
                 <p className="text-slate-600 mb-6">
                   Schedule a visit or connect with the builder today. Our team is available 24/7.
                 </p>
-                <button className="w-full py-3 rounded-xl font-semibold text-white bg-[linear-gradient(to_right,#f59e0b,var(--color-accent-gold))] hover:scale-[1.02] active:scale-95 transition-all shadow-md">
+                <a
+                  href={`/booking/${property._id}`}
+                  className="block w-full py-3 rounded-xl font-semibold text-white bg-[linear-gradient(to_right,#f59e0b,var(--color-accent-gold))] hover:scale-[1.02] active:scale-95 transition-all shadow-md text-center"
+                >
                   Contact Agent
-                </button>
+                </a>
                 <ul className="mt-6 space-y-3 text-sm text-slate-600">
                   <li className="flex items-center gap-2">
                     <CheckCircleIcon className="h-5 w-5 text-green-600" /> Verified Listing

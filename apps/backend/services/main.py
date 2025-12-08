@@ -27,6 +27,7 @@ from api.search.router import router as search_router  # noqa: E402
 from api.chat.router import router as chat_router  # noqa: E402
 from api.builder.router import router as builder_router
 from api.properties.router import router as properties_router
+from api.booking.router import router as booking_router
 
 
 @asynccontextmanager
@@ -92,6 +93,7 @@ app.include_router(search_router)
 app.include_router(chat_router)
 app.include_router(builder_router)
 app.include_router(properties_router)
+app.include_router(booking_router)
 
 # Import and include storage router
 from api.storage.router import router as storage_router

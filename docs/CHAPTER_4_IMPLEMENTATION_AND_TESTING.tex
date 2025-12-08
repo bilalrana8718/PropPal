@@ -1,0 +1,918 @@
+\chapter{Implementation and Testing}
+
+\section{General Description}
+
+PropPal is an AI-driven, multi-agent real estate platform designed specifically for Pakistan's real estate market. The system leverages Natural Language Processing (NLP), Retrieval-Augmented Generation (RAG), and vector similarity search to provide intelligent, conversational property search and booking capabilities.
+
+\subsection{System Context}
+
+PropPal operates as a multi-tier architecture consisting of:
+
+\begin{itemize}
+    \item \textbf{Frontend Layer}: Next.js web application providing user interface for buyers, sellers, and builders
+    \item \textbf{API Gateway}: FastAPI-based backend service orchestrating multiple specialized agents
+    \item \textbf{Multi-Agent System}: Specialized AI agents handling different aspects of real estate operations
+    \item \textbf{Database Layer}: MongoDB Atlas with vector search capabilities for semantic property matching
+\end{itemize}
+
+\subsection{Core Functionality}
+
+The system provides the following major functionalities:
+
+\begin{enumerate}
+    \item \textbf{Conversational Property Search}: Users can search for properties using natural language queries (e.g., ``3 bedroom house in Islamabad under 50 lakhs'')
+    \item \textbf{Builder Discovery}: Search and discovery of construction companies and their services
+    \item \textbf{Intelligent Booking System}: Automated scheduling of property visits by matching buyer and seller availability
+    \item \textbf{Semantic Search}: Vector-based similarity search enabling flexible, context-aware property matching
+\end{enumerate}
+
+\subsection{Design Philosophy}
+
+PropPal follows a \textbf{multi-agent architecture} where specialized agents handle distinct domains:
+
+\begin{itemize}
+    \item \textbf{Router Agent}: Acts as an orchestrator, classifying user queries and routing them to appropriate specialized agents
+    \item \textbf{Listing Agent}: Handles property search and discovery
+    \item \textbf{Builder Agent}: Manages builder profile and service searches
+    \item \textbf{Booking Agent}: Coordinates visit scheduling between buyers and sellers
+\end{itemize}
+
+This design enables modularity, scalability, and the ability to add new specialized agents without disrupting existing functionality.
+
+\section{Modules}
+
+The system architecture consists of functional modules that are further divided according to the type of client and backend services. Each module is briefly elucidated and followed by the list of main features.
+
+\subsection{Client Web App (Buyer \& Seller Portals)}
+
+\textbf{Description:} A digital platform for the users from different sectors such as buyers, sellers, and builders. The platform offers a responsive and user-friendly interface that is mainly concerned with the discoverability of properties, the creation of listings, and the smooth operation of engagement workflows.
+
+\begin{itemize}
+    \item \textbf{Buyer Dashboard:} A search box that allows for conversation, searches that are saved, recommendations that suit one's taste, filters, map view and a shortlist.
+    \item \textbf{Seller Dashboard:} Help from AI in the creation of listings, uploading of media, analyzing of listings, and managing of sales leads.
+    \item \textbf{Builder Dashboard (Web):} Pages of projects, creation of pitches, management of bids.
+    \item \textbf{Visit Management:} Confirm and view site visits suggested by AI, change the schedule, and get updates.
+\end{itemize}
+
+\subsection{Client Mobile App (Buyer \& Seller)}
+
+\textbf{Description:} A mobile application that could either be native or cross-platform and is providing the users with the ability to search, make voice queries and coordinate visits while on the go.
+
+\begin{itemize}
+    \item \textbf{Voice \& Text Search:} Support for input through speech-to-text and natural language query.
+    \item \textbf{Push Notifications:} Reminders for bookings, new matches, and replies from builders.
+    \item \textbf{Quick Listing Flow:} A property listing that is optimized for mobile with camera-based image uploads.
+\end{itemize}
+
+\subsection{Backend Services \& API Gateway}
+
+\textbf{Description:} The main backend is in charge of controlling the operations of the various microservices and handling the authentication process. Furthermore, it provides RESTful APIs for different clients and controls the operations according to the roles assigned to the users.
+
+\begin{itemize}
+    \item Management of users and administration of access rights according to roles (buyers, sellers, builders, and admins).
+    \item REST APIs designed for client applications.
+    \item A notification service that includes email, SMS, and push notifications.
+    \item Logging, and monitoring through metrics.
+\end{itemize}
+
+\subsection{NLP \& RAG Module}
+
+\textbf{Description:} The Natural Language Processing (NLP) stack which is the backbone of the conversational search and listing assistance, is done through the help of embeddings, retrieval-augmented generation (RAG), and large language models (LLMs).
+
+\begin{itemize}
+    \item Recognizing queries and extracting the user's intention.
+    \item Creating embeddings and running vector search for semantic retrieval (RAG).
+    \item Using LLM for response generation for conversational UI and listing summarization.
+    \item Working with multiple languages (English AND Urdu) and detecting the language.
+\end{itemize}
+
+\subsection{Search, Geo \& Amenities Engine}
+
+\textbf{Description:} A combination of geo-spatial indexing, amenities detection, and distance-based ranking that works together as a powerful engine for enhancing property relevance as well as contextual recommendations.
+
+\begin{itemize}
+    \item Integrating geo-coding and reverse-geocoding.
+    \item Extraction of nearby amenities (such as schools and hospitals, as well as transit and markets).
+    \item Implementing distance/time-based scoring for the purpose of ranking search results.
+    \item Providing map tiles and making interactive map overlays available.
+\end{itemize}
+
+\subsection{AI Visit Booking Agent}
+
+\textbf{Description:} The self-sufficient agent that takes care of coming up with, agreeing upon, and overseeing the visit schedules for both buyers and sellers.
+
+\begin{itemize}
+    \item Negotiation of the availability and suggestions of the time slots.
+    \item Confirmation, rescheduling, and cancellation processes.
+    \item Automated reminders and communication templates.
+\end{itemize}
+
+\section{Detailed Use Cases}
+
+\subsection{Use Case 1: Search Property}
+
+\begin{itemize}
+    \item \textbf{Scope:} PropPal Platform
+    \item \textbf{Level:} User-goal
+    \item \textbf{Primary Actor:} Buyer
+    \item \textbf{Stakeholders and Interests:}
+    \begin{itemize}
+        \item Buyer: Wants to find suitable properties that match preferences and budget.
+        \item System: Needs to process natural language input efficiently and return accurate results.
+    \end{itemize}
+    \item \textbf{Preconditions:} Buyer has logged in to the system.
+    \item \textbf{Postconditions:} Personalized and context-aware property listings are displayed.
+    \item \textbf{Main Success Scenario:}
+    \begin{enumerate}
+        \item Buyer submits a natural language search query.
+        \item Chat UI + Router Agent interprets the intent.
+        \item Listing Agent retrieves matching property listings.
+        \item Amenity services enrich results with contextual data.
+        \item Ranked results are displayed to the Buyer.
+    \end{enumerate}
+    \item \textbf{Extensions:}
+    \begin{itemize}
+        \item 1a. Invalid or incomplete query $\rightarrow$ System prompts Buyer for clarification.
+        \item 3a. No results found $\rightarrow$ System suggests alternative locations or filters.
+        \item 4a. NLP failure $\rightarrow$ Default keyword-based search used.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Use Case 2: List Property}
+
+\begin{itemize}
+    \item \textbf{Scope:} PropPal Platform
+    \item \textbf{Level:} User-goal
+    \item \textbf{Primary Actor:} Seller
+    \item \textbf{Stakeholders and Interests:}
+    \begin{itemize}
+        \item Seller: Wants to list property easily with minimal manual input.
+        \item System: Ensures all listings are structured and validated.
+    \end{itemize}
+    \item \textbf{Preconditions:} Seller account is verified.
+    \item \textbf{Postconditions:} Property listing is successfully published and discoverable.
+    \item \textbf{Main Success Scenario:}
+    \begin{enumerate}
+        \item Seller accesses ``Add Property'' page.
+        \item Enters or speaks property details.
+        \item Chat UI + Router Agent forwards data to Listing Agent.
+        \item Listing Agent structures and validates listing using NLP.
+        \item Seller reviews and confirms publication.
+    \end{enumerate}
+    \item \textbf{Extensions:}
+    \begin{itemize}
+        \item 2a. Missing fields $\rightarrow$ System prompts Seller to complete data.
+        \item 3a. Media upload failure $\rightarrow$ Seller retries or skips image upload.
+        \item 4a. Validation error $\rightarrow$ Listing not published until fixed.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Use Case 3: Book Property Visit}
+
+\begin{itemize}
+    \item \textbf{Scope:} PropPal Platform
+    \item \textbf{Level:} User-goal
+    \item \textbf{Primary Actor:} Buyer
+    \item \textbf{Stakeholders and Interests:}
+    \begin{itemize}
+        \item Buyer: Wants visit times to be convenient and therefore subject to the scheduling of the buyer.
+        \item Seller: Expects timely communication about the property being shown.
+        \item System: Confirms through proper scheduling and notifications that the process is valid.
+    \end{itemize}
+    \item \textbf{Preconditions:} Buyer has a property selected.
+    \item \textbf{Postconditions:} Confirmation of the visit appointment for the Buyer and Seller is given.
+    \item \textbf{Main Success Scenario:}
+    \begin{enumerate}
+        \item Buyer clicks ``Book Visit.''
+        \item Chat UI + Router Agent sends request to Booking Agent.
+        \item Booking Agent checks Buyer/Seller availability.
+        \item Booking Agent suggests available time slots.
+        \item Buyer confirms; notifications are sent.
+    \end{enumerate}
+    \item \textbf{Extensions:}
+    \begin{itemize}
+        \item 3a. Scheduling conflict $\rightarrow$ Alternative slots suggested.
+        \item 4a. Network error $\rightarrow$ System retries or prompts user to reattempt.
+        \item 5a. Unresponsive participant $\rightarrow$ Reminder sent automatically.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Use Case 4: Publish Builder Services}
+
+\begin{itemize}
+    \item \textbf{Scope:} PropPal Platform
+    \item \textbf{Level:} User-goal
+    \item \textbf{Primary Actor:} Builder
+    \item \textbf{Stakeholders and Interests:}
+    \begin{itemize}
+        \item Builder: Wants to advertise construction or renovation services.
+        \item System: Maintains valid service records for discoverability.
+    \end{itemize}
+    \item \textbf{Preconditions:} Builder is logged in and verified.
+    \item \textbf{Postconditions:} Builder's services become visible to Buyers.
+    \item \textbf{Main Success Scenario:}
+    \begin{enumerate}
+        \item Builder navigates to ``My Services'' section.
+        \item Enters details (service type, budget, expertise, etc.).
+        \item Builder Agent validates and stores service information.
+        \item Service is published and indexed for discovery.
+    \end{enumerate}
+    \item \textbf{Extensions:}
+    \begin{itemize}
+        \item 2a. Missing input $\rightarrow$ System prompts Builder to fill required data.
+        \item 3a. Validation error $\rightarrow$ System rejects incomplete submission.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Use Case 5: Submit Project Bid}
+
+\begin{itemize}
+    \item \textbf{Scope:} PropPal Platform
+    \item \textbf{Level:} User-goal
+    \item \textbf{Primary Actor:} Builder
+    \item \textbf{Stakeholders and Interests:}
+    \begin{itemize}
+        \item Builder: Seeks to secure projects via competitive bidding.
+        \item Buyer: Receives multiple bid offers for review.
+    \end{itemize}
+    \item \textbf{Preconditions:} Builder is authenticated and eligible to bid.
+    \item \textbf{Postconditions:} Bid is recorded and Buyer is notified.
+    \item \textbf{Main Success Scenario:}
+    \begin{enumerate}
+        \item Builder views ``Available Projects.''
+        \item Reviews project details and requirements.
+        \item Submits proposal (cost, timeline, materials).
+        \item Builder Agent links bid to project record.
+        \item Buyer is notified about the new bid.
+    \end{enumerate}
+    \item \textbf{Extensions:}
+    \begin{itemize}
+        \item 2a. Project expired $\rightarrow$ System prevents new bids.
+        \item 3a. Invalid data $\rightarrow$ Builder prompted to correct input.
+        \item 4a. Network error $\rightarrow$ Retry or temporary storage of bid.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Use Case 6: View Nearby Amenities}
+
+\begin{itemize}
+    \item \textbf{Scope:} PropPal Platform
+    \item \textbf{Level:} User-goal
+    \item \textbf{Primary Actor:} Buyer
+    \item \textbf{Stakeholders and Interests:}
+    \begin{itemize}
+        \item Buyer: Wants to understand the environment around selected properties.
+        \item System: Provides accurate, map-based contextual data.
+    \end{itemize}
+    \item \textbf{Preconditions:} Buyer has selected a property from results.
+    \item \textbf{Postconditions:} Buyer views nearby amenities ranked by distance.
+    \item \textbf{Main Success Scenario:}
+    \begin{enumerate}
+        \item Buyer clicks ``View Nearby Amenities.''
+        \item System sends property coordinates to Amenity Detection Agent.
+        \item Agent queries geo-services for nearby facilities.
+        \item System compiles results with distance and type.
+        \item Buyer views an interactive map and list of amenities.
+    \end{enumerate}
+    \item \textbf{Extensions:}
+    \begin{itemize}
+        \item 3a. Geo-service unavailable $\rightarrow$ Retry or fallback to cached data.
+        \item 4a. No nearby amenities $\rightarrow$ Display appropriate message.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Use Case 7: Locate Properties by Nearby Amenities}
+
+\begin{itemize}
+    \item \textbf{Scope:} PropPal Platform
+    \item \textbf{Level:} User-goal
+    \item \textbf{Primary Actor:} Buyer
+    \item \textbf{Stakeholders and their Interests:}
+    \begin{itemize}
+        \item Buyer: Seeks to discover houses that are in the vicinity of favorite amenities like schools, hospitals, markets, or metro stations.
+        \item System: Guarantees relevant and precise property outcomes by means of geo-based filtering and amenity detection.
+    \end{itemize}
+    \item \textbf{Preconditions:} The buyer must be logged in and provide a valid amenity name or category (e.g., ``hospital'' or ``metro station'').
+    \item \textbf{Postconditions:} The buyer obtains a ranked listing of properties located within a particular radius of the chosen amenities.
+    \item \textbf{Main success scenario:}
+    \begin{enumerate}
+        \item The buyer enters a request like ``Show apartments near a school within a 5 km radius.''
+        \item The chat UI + Router Agent recognizes the intent as an amenity-based search.
+        \item The Amenity Detection Agent obtains the geographical coordinates of the relevant amenities.
+        \item The Listing Agent gathers and ranks the property results according to proximity and match score.
+        \item The system presents the search results.
+    \end{enumerate}
+    \item \textbf{Extensions:}
+    \begin{itemize}
+        \item 3a. Amenity not recognized $\rightarrow$ The system will ask the user to re-input or choose from suggestions.
+        \item 4a. No properties found within the range $\rightarrow$ Suggests expanding search radius or alternate amenities.
+    \end{itemize}
+\end{itemize}
+
+\section{Functional Requirements}
+
+In this portion, the functional needs of the system are pointed out. They are arranged in a hierarchical manner according to User Classes and their corresponding Use Cases. Each functional necessity highlights the system behavior which can be noticed as a result of users' actions or inputs.
+
+\subsection{User Class 1: Buyer}
+
+\textbf{Description:} Buyers are either single persons or families who are looking for residential or commercial properties according to their likes and dislikes in terms of location, price range, and lifestyle. The main point of contact for them with the system is the natural language interface through which they will search, see and ask for property visit schedules.
+
+\subsubsection{Use Case 1: Search Property}
+
+\textbf{Functional Requirements:}
+\begin{enumerate}
+    \item FR1.1.1 Using natural language queries (e.g., ``2-floor house in G-10/3 near a school and hospital''), the system shall permit buyers to look for properties.
+    \item FR1.1.2 The system will decode the queries of the buyers and reveal the main property requirements such as place, building type, price range, and what is around it.
+    \item FR1.1.3 The system will present the buyer with a list of properties that are most compatible with his or her expressed preferences.
+    \item FR1.1.4 Near to each property that is for sale, the system shall inform about other necessary things like schools, hospitals, and roads.
+    \item FR1.1.5 The system must enable buyers to sort or filter search results based on the factors like price, distance, property features, and ratings.
+\end{enumerate}
+
+\subsubsection{Use Case 3: Book Property Visit}
+
+\textbf{Functional Requirements:}
+\begin{enumerate}
+    \item FR1.3.1 The system shall make it possible for buyers to directly request a visit for a chosen property from the property details page.
+    \item FR1.3.2 The system shall make it possible for buyers to pick the time slots that are available for property visits.
+    \item FR1.3.3 The system shall notify both the buyer and the seller through confirmation of visit once the visit is scheduled.
+    \item FR1.3.4 The system shall make available options to reschedule or cancel a booked visit before the confirmed date.
+    \item FR1.3.5 The system shall notify the user with a suitable message if the scheduling fails because of conflicts or connectivity issues.
+\end{enumerate}
+
+\subsection{User Class 2: Seller}
+
+\textbf{Description:} Sellers consist of the property owners and real estate agents who list and manage their properties in the system. They want to easily create listing, upload media, and have the tools for attracting and managing buyer interest.
+
+\subsubsection{Use Case 2: List Property}
+
+\textbf{Functional Requirements:}
+\begin{enumerate}
+    \item FR2.2.1 The system must permit the sellers to register new property listings by providing the important location, property type, price, and description details.
+    \item FR2.2.2 The system must permit the sellers to upload the pictures of the properties.
+    \item FR2.2.3 The system must support the sellers with auto-suggesting tags, categories, or descriptive keywords as per the entered details.
+    \item FR2.2.4 The system must allow the sellers to view and change the listings before making them public.
+    \item FR2.2.5 The system must check the mandatory fields and alert the sellers if any essential information is missing.
+    \item FR2.2.6 The system must show the submitted and published property to the buyers after the successful submission.
+    \item FR2.2.7 The system must present accurate error messages in the case of validation or media upload problems.
+\end{enumerate}
+
+\subsection{User Class 3: Builder / Developer}
+
+\textbf{Description:} Users are mainly those builders or developers, who are either individuals or companies, that render construction, renovation, or development services, and they participate in the bidding of projects, which are opened to the public. The system is the main vehicle to such builders or developers, as it not only helps them to get noticed but also gives them control over the project opportunities.
+
+\subsubsection{Use Case 4: Publish Builder Services}
+
+\textbf{Functional Requirements:}
+\begin{enumerate}
+    \item FR3.4.1 Builders will be able to create and control service listings through their dashboard, as per the system's capabilities.
+    \item FR3.4.2 Builders will be able to share the information about their skills, budget range, project types, and service areas, based on the system's functionalities.
+    \item FR3.4.3 The system will certify that all essential service details are filled in before the submission.
+    \item FR3.4.4 The system will publish authentic service listings and will show them to the buyers looking for similar services.
+    \item FR3.4.5 The system will inform builders about any missing field or information that is required.
+\end{enumerate}
+
+\subsubsection{Use Case 5: Submit Project Bid}
+
+\textbf{Functional Requirements:}
+\begin{enumerate}
+    \item FR3.5.1 Builders will be able to view the currently bidding available projects through the system.
+    \item FR3.5.2 The system will provide the project information and show the requirements, possible duration, and budget range.
+    \item FR3.5.3 Builders will be able to present their proposals through the system, which will include cost estimates, timelines, and resource details.
+    \item FR3.5.4 The system will confirm to the builders that their bids have been successfully submitted and will inform the buyers concerned.
+    \item FR3.5.5 The system will offer suitable feedback if a bid could not be submitted due to invalid listings or lack of information.
+\end{enumerate}
+
+\subsection{Non-Functional Requirements}
+
+\subsubsection{Reliability Requirements}
+
+\begin{itemize}
+    \item REL-1: During normal and testing sessions, the system will have to work very reliably and not crash at times.
+    \item REL-2: Unexpected errors will have to be faced by the system and it will have to recover without losing any data.
+    \item REL-3: To stop losing data through restarts, the database will be made the ultimate store for user data and it will be done to the fullest extent.
+    \item REL-4: Throughout the system operation, errors will have to be logged for further analysis and corrective actions.
+\end{itemize}
+
+\subsubsection{Usability Requirements}
+
+\begin{itemize}
+    \item USE-1: It is expected that a user who is not familiar with the system will take about 10 minutes to perform the main actions (search, list, book) without any help at all.
+    \item USE-2: The interface will have to be consistent throughout the application with respect to layout, color theme, and navigation.
+    \item USE-3: No task will take more than 3 clicks from the main menu to access.
+    \item USE-4: Clear, human-readable error and success messages will have to be displayed by the system.
+    \item USE-5: A basic level of accessibility (readable text, proper color contrast) will have to be supported by the system.
+\end{itemize}
+
+\subsubsection{Performance Requirements}
+
+\begin{itemize}
+    \item PER-1: The system will react to user actions (like searching or viewing property) within 5 seconds in most cases.
+    \item PER-2: The system will allow 10--20 concurrent users during the test with no significant slowdowns.
+    \item PER-3: The major pages will take maximum 5 seconds to load on 10Mbps or higher stable internet connection.
+    \item PER-4: Data retrieval for property searches on less than 5K records will take max 2 seconds.
+\end{itemize}
+
+\subsubsection{Security Requirements}
+
+\begin{itemize}
+    \item SEC-1: The system will require authentication prior to providing any personalized features to the users.
+    \item SEC-2: Before storing user passwords in the database, they will be hashed in a secure manner.
+\end{itemize}
+
+\section{Data Design}
+
+The data associated with the PropPal system is organized into different types and then gathered as a collection in a unified database, which is the only one for the entire platform. This complex real estate platform thus has the flexibility required as it is built around the NoSQL, document-oriented approach.
+
+The primary data entities specified in the DBML schema consist of users, properties, builder\_profiles, user\_projects, builder\_bids, and visits. A collection in the database is assigned to each of these data entities.
+
+\subsection{Data Storage, Processing, and Organization}
+
+\textbf{Storage:} The whole system uses a single MongoDB database to store all its data. This database has been set up in such a way that it can perform both the regular document storage and the more advanced vector search at the same time. The decision to go for MongoDB is based on the fact that it offers a flexible schema which is very much suitable for keeping a range of different kinds of data such as property specifications, user-submitted projects with different requirements and builders' profiles with different portfolios.
+
+\textbf{Processing:} The data is handled by the intelligent AI agents that specialize in the specific processing layer of the application. For instance:
+
+\begin{itemize}
+    \item The NLP/RAG Agent takes care of the non-structured text from query\_logs and properties descriptions by converting it into vector embeddings, which are then kept within the properties collection itself.
+    \item The Listing Agent mediates between the properties and property\_amenities collections. It employs the embeddings created by the NLP agent to make a semantic vector search query that is run directly on the properties collection in MongoDB during a search.
+    \item The Booking Agent looks after the flow of documents in the visits collection and manages the status updates from pending to confirmed or cancelled.
+    \item An agent dedicated exclusively to the builder ecosystem would regulate the interactions among user\_projects, builder\_profiles, and builder\_bids.
+\end{itemize}
+
+\textbf{Organization:} The data has been systematically arranged into separate collections that illustrate the main entities of the domain. Entity relationships are preserved using \texttt{ObjectId} references as per the schema. A typical case is a document in the properties collection, which includes a \texttt{seller\_id} directing to a corresponding document in the users collection. This referential method supports data integrity without the drawbacks of rigidity related to traditional relational database joins. Non-structured data like pictures and attachments are kept in the form of URL arrays where the actual files are stored on a dedicated media storage solution.
+
+\subsection{Database and Data Storage Items}
+
+The major database utilized by the complete system is:
+
+\begin{itemize}
+    \item \textbf{MongoDB:} A NoSQL document database that is going to be the main storage for all structured data (users, properties, bids, etc.) and text embeddings for semantic search. The whole data storage design is based on the integrated vector search functionality, which is the system's core and removes the necessity of having a separate vector store.
+\end{itemize}
+
+Secondary storage consists of:
+
+\begin{itemize}
+    \item \textbf{Backblaze B2 Cloud Storage:} Backblaze B2 is the cloud storage where all object files, mainly images for properties and builder portfolios, are kept. The system communicates with this storage via the Python boto3 library using its S3-compatible API. The whole process of getting images from source URLs, putting them in a specific B2 bucket, and creating a public access URL is done automatically. These URLs are then recorded either as strings or in JSON arrays within the relevant MongoDB documents, which guarantees fast and reliable access to the visual assets.
+\end{itemize}
+
+\section{Algorithm Design}
+
+Mention the algorithm(s) used in your project to get the work done with regards to major modules. Provide a pseudocode explanation regarding the functioning of the core features. Following are few examples of algorithms/pseudocode.
+
+\subsection{Router Agent Algorithm}
+
+The Router Agent serves as the central orchestrator, classifying user queries and routing them to specialized agents. It uses a lightweight LLM for fast intent classification.
+
+\begin{algorithm}[H]
+\caption{Router Agent Query Classification and Routing}
+\label{alg:router}
+\begin{algorithmic}[1]
+\REQUIRE user\_query (string), clerk\_id (optional string)
+\ENSURE Routed response from appropriate agent
+\STATE Initialize RouterState $\leftarrow$ \{query: user\_query, clerk\_id: clerk\_id, messages: []\}
+\STATE classification $\leftarrow$ classify\_intent(user\_query)
+\IF{classification == ``listing\_agent''}
+    \STATE ListingAgent $\leftarrow$ get\_listing\_agent()
+    \STATE result $\leftarrow$ ListingAgent.process\_query(user\_query)
+    \RETURN result
+\ELSIF{classification == ``builder\_agent''}
+    \STATE BuilderAgent $\leftarrow$ get\_builder\_agent()
+    \STATE result $\leftarrow$ BuilderAgent.process\_query(user\_query, clerk\_id)
+    \RETURN result
+\ELSIF{classification == ``booking\_agent''}
+    \STATE BookingAgent $\leftarrow$ get\_booking\_agent()
+    \STATE result $\leftarrow$ BookingAgent.process\_query(user\_query, clerk\_id)
+    \RETURN result
+\ELSE
+    \RETURN general\_chat\_response(user\_query)
+\ENDIF
+\STATE
+\FUNCTION{classify\_intent}{query}
+    \STATE prompt $\leftarrow$ ``Classify query as: listing\_agent, builder\_agent, booking\_agent, or general\_chat''
+    \STATE classification $\leftarrow$ LLM.classify(prompt, query)
+    \RETURN classification
+\ENDFUNCTION
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Key Features:}
+\begin{itemize}
+    \item Fast intent classification using structured LLM output
+    \item Stateless agent instantiation for each request
+    \item Fallback to general chat for unclassified queries
+\end{itemize}
+
+\subsection{Property Search Algorithm (Vector Similarity Search)}
+
+The Property Search algorithm uses vector embeddings to perform semantic similarity search, enabling natural language queries to match properties based on meaning rather than exact keyword matching.
+
+\begin{algorithm}[H]
+\caption{Property Vector Similarity Search}
+\label{alg:property_search}
+\begin{algorithmic}[1]
+\REQUIRE query (string), k (integer) \COMMENT{k = number of results}
+\ENSURE List of matching properties with similarity scores
+\IF{query is empty}
+    \RETURN empty\_results
+\ENDIF
+\STATE \COMMENT{Generate query embedding}
+\STATE query\_embedding $\leftarrow$ embed\_text(query)
+\STATE
+\STATE \COMMENT{Build vector search pipeline}
+\STATE pipeline $\leftarrow$ [\{
+\STATE \quad ``\$vectorSearch'': \{
+\STATE \quad \quad ``index'': ``properties\_embedding\_index'',
+\STATE \quad \quad ``path'': ``embedding'',
+\STATE \quad \quad ``queryVector'': query\_embedding,
+\STATE \quad \quad ``numCandidates'': max(500, k $\times$ 10),
+\STATE \quad \quad ``limit'': k
+\STATE \quad \}
+\STATE \}, \{
+\STATE \quad ``\$project'': \{
+\STATE \quad \quad ``score'': \{\``\$meta'': ``vectorSearchScore''\},
+\STATE \quad \quad ``title'': 1, ``price'': 1, ``city'': 1, ``area'': 1,
+\STATE \quad \quad ``property\_type'': 1, ``bedrooms'': 1, ``bathrooms'': 1,
+\STATE \quad \quad ``area\_sqft'': 1, ``images'': 1
+\STATE \quad \}
+\STATE \}]
+\STATE
+\STATE \COMMENT{Execute search}
+\STATE results $\leftarrow$ db[``properties''].aggregate(pipeline).to\_list(k)
+\STATE
+\STATE \COMMENT{Normalize ObjectIds for JSON serialization}
+\FOR{each result in results}
+    \STATE result[``\_id''] $\leftarrow$ str(result[``\_id''])
+\ENDFOR
+\RETURN \{``success'': true, ``query'': query, ``results'': results, ``count'': length(results)\}
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Key Features:}
+\begin{itemize}
+    \item Uses sentence transformer model (all-MiniLM-L6-v2) for embedding generation
+    \item MongoDB Atlas vector search for efficient similarity computation
+    \item Returns top-k most similar properties based on cosine similarity
+\end{itemize}
+
+\subsection{Builder Search Algorithm}
+
+Similar to property search, the Builder Search algorithm performs vector similarity search on builder profiles and services, enabling users to find builders based on natural language descriptions.
+
+\begin{algorithm}[H]
+\caption{Builder Vector Similarity Search}
+\label{alg:builder_search}
+\begin{algorithmic}[1]
+\REQUIRE query (string), search\_type (string) \COMMENT{``profile'' or ``service''}
+\ENSURE List of matching builders/services with similarity scores
+\IF{query is empty}
+    \RETURN empty\_results
+\ENDIF
+\STATE \COMMENT{Generate query embedding}
+\STATE query\_embedding $\leftarrow$ embed\_text(query)
+\STATE
+\STATE \COMMENT{Select collection and index based on search\_type}
+\IF{search\_type == ``profile''}
+    \STATE collection $\leftarrow$ ``builder\_profiles''
+    \STATE index\_name $\leftarrow$ ``builder\_profile\_index''
+    \STATE project\_fields $\leftarrow$ \{``company\_name'': 1, ``specialization'': 1, ``experience\_years'': 1, ``city'': 1, ``contact\_person'': 1, ``contact\_email'': 1, ``contact\_phone'': 1\}
+\ELSIF{search\_type == ``service''}
+    \STATE collection $\leftarrow$ ``builder\_services''
+    \STATE index\_name $\leftarrow$ ``builder\_service\_index''
+    \STATE project\_fields $\leftarrow$ \{``service\_name'': 1, ``description'': 1, ``category'': 1, ``price\_range\_min'': 1, ``price\_range\_max'': 1, ``builder\_id'': 1\}
+\ENDIF
+\STATE
+\STATE \COMMENT{Build vector search pipeline}
+\STATE pipeline $\leftarrow$ [\{
+\STATE \quad ``\$vectorSearch'': \{
+\STATE \quad \quad ``index'': index\_name,
+\STATE \quad \quad ``path'': ``embeddings'',
+\STATE \quad \quad ``queryVector'': query\_embedding,
+\STATE \quad \quad ``numCandidates'': max(100, k $\times$ 10),
+\STATE \quad \quad ``limit'': k
+\STATE \quad \}
+\STATE \}, \{
+\STATE \quad ``\$project'': \{
+\STATE \quad \quad ``score'': \{\``\$meta'': ``vectorSearchScore''\},
+\STATE \quad \quad **project\_fields
+\STATE \quad \}
+\STATE \}]
+\STATE
+\STATE \COMMENT{Execute search}
+\STATE results $\leftarrow$ db[collection].aggregate(pipeline).to\_list(k)
+\STATE
+\STATE \COMMENT{Normalize ObjectIds}
+\FOR{each result in results}
+    \STATE result[``\_id''] $\leftarrow$ str(result[``\_id''])
+    \IF{``builder\_id'' in result}
+        \STATE result[``builder\_id''] $\leftarrow$ str(result[``builder\_id''])
+    \ENDIF
+\ENDFOR
+\RETURN \{``success'': true, ``query'': query, ``results'': results, ``count'': length(results)\}
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Key Features:}
+\begin{itemize}
+    \item Supports both profile and service-level searches
+    \item Maintains referential integrity by preserving builder\_id in service results
+    \item Uses same embedding model for consistency across search types
+\end{itemize}
+
+\subsection{Booking Agent Slot Matching Algorithm}
+
+The Booking Agent coordinates visit scheduling by matching buyer-preferred time slots with seller availability. It includes natural language date parsing and overlap computation.
+
+\begin{algorithm}[H]
+\caption{Booking Agent Slot Matching}
+\label{alg:booking}
+\begin{algorithmic}[1]
+\REQUIRE user\_query (string), property\_id (string), buyer\_id (optional string)
+\ENSURE Matching time slots or booking confirmation
+\STATE \COMMENT{Extract property\_id from query if not provided}
+\IF{property\_id is None}
+    \STATE property\_id $\leftarrow$ extract\_property\_id(user\_query)
+\ENDIF
+\STATE
+\STATE \COMMENT{Step 1: Get seller availability}
+\STATE seller\_availability $\leftarrow$ get\_seller\_slots(property\_id)
+\STATE seller\_slots $\leftarrow$ seller\_availability[``slots'']
+\STATE
+\STATE \COMMENT{Step 2: Extract buyer preferences from query}
+\STATE buyer\_time\_expression $\leftarrow$ extract\_time\_expression(user\_query)
+\STATE
+\IF{buyer\_time\_expression is not empty}
+    \STATE \COMMENT{Step 3: Parse natural language dates}
+    \IF{is\_natural\_language(buyer\_time\_expression)}
+        \STATE buyer\_slots $\leftarrow$ parse\_natural\_language\_dates(buyer\_time\_expression)
+    \ELSE
+        \STATE buyer\_slots $\leftarrow$ parse\_iso\_dates(buyer\_time\_expression)
+    \ENDIF
+    \STATE
+    \STATE \COMMENT{Step 4: Compute overlap}
+    \STATE overlap $\leftarrow$ compute\_slot\_overlap(buyer\_slots, seller\_slots)
+    \STATE
+    \IF{overlap is not empty}
+        \RETURN \{``success'': true, ``overlap'': overlap, ``overlap\_readable'': format\_dates\_readable(overlap), ``message'': ``Found matching times''\}
+    \ELSE
+        \RETURN \{``success'': true, ``overlap'': [], ``seller\_slots\_readable'': format\_dates\_readable(seller\_slots), ``message'': ``No overlap. Seller available''\}
+    \ENDIF
+\ELSE
+    \STATE \COMMENT{No buyer preferences provided}
+    \RETURN \{``success'': true, ``seller\_slots\_readable'': format\_dates\_readable(seller\_slots), ``message'': ``Seller available. When would you like to visit?''\}
+\ENDIF
+\STATE
+\FUNCTION{compute\_slot\_overlap}{buyer\_slots, seller\_slots}
+    \STATE overlap $\leftarrow$ intersection(buyer\_slots, seller\_slots)
+    \STATE overlap $\leftarrow$ sort\_by\_datetime(overlap)
+    \RETURN overlap
+\ENDFUNCTION
+\STATE
+\FUNCTION{parse\_natural\_language\_dates}{text}
+    \STATE results $\leftarrow$ []
+    \STATE base\_date $\leftarrow$ current\_date()
+    \STATE
+    \STATE \COMMENT{Handle day names: ``Saturday'', ``Monday'', etc.}
+    \FOR{each day\_name in [``monday'', ``tuesday'', \ldots, ``sunday'']}
+        \IF{day\_name in text.lower()}
+            \STATE days\_ahead $\leftarrow$ compute\_days\_until(day\_name, base\_date)
+            \STATE target\_date $\leftarrow$ base\_date + days\_ahead
+            \STATE
+            \STATE \COMMENT{Extract time: ``2PM'', ``afternoon'', etc.}
+            \STATE time\_info $\leftarrow$ extract\_time(text)
+            \IF{time\_info is not None}
+                \STATE datetime $\leftarrow$ combine\_date\_time(target\_date, time\_info)
+                \STATE results.append(datetime.isoformat())
+            \ENDIF
+        \ENDIF
+    \ENDFOR
+    \STATE
+    \STATE \COMMENT{Handle relative dates: ``tomorrow'', ``next week''}
+    \IF{``tomorrow'' in text.lower()}
+        \STATE target\_date $\leftarrow$ base\_date + 1 day
+        \STATE time\_info $\leftarrow$ extract\_time(text) or default\_time()
+        \STATE datetime $\leftarrow$ combine\_date\_time(target\_date, time\_info)
+        \STATE results.append(datetime.isoformat())
+    \ENDIF
+    \STATE
+    \STATE \COMMENT{Handle specific dates: ``January 20th at 2pm''}
+    \STATE date\_match $\leftarrow$ regex\_match(``(month\_name) (day) at (time)'', text)
+    \IF{date\_match is not None}
+        \STATE datetime $\leftarrow$ parse\_specific\_date(date\_match)
+        \STATE results.append(datetime.isoformat())
+    \ENDIF
+    \RETURN results
+\ENDFUNCTION
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Key Features:}
+\begin{itemize}
+    \item Natural language date parsing supporting multiple formats
+    \item Efficient set intersection for overlap computation
+    \item Human-readable date formatting for user responses
+    \item Handles timezone-aware datetime objects
+\end{itemize}
+
+\subsection{Listing Agent Workflow Algorithm}
+
+The Listing Agent orchestrates property search through a cyclical agent pattern, allowing iterative refinement of search queries.
+
+\begin{algorithm}[H]
+\caption{Listing Agent Workflow}
+\label{alg:listing}
+\begin{algorithmic}[1]
+\REQUIRE user\_query (string)
+\ENSURE Property search results and conversational response
+\STATE Initialize AgentState $\leftarrow$ \{
+\STATE \quad messages: [HumanMessage(user\_query)],
+\STATE \quad query: user\_query,
+\STATE \quad data: \{\},
+\STATE \quad success: false,
+\STATE \quad response: ``''
+\STATE \}
+\STATE
+\STATE \COMMENT{Main agent loop}
+\WHILE{not finished}
+    \STATE \COMMENT{Agent decides on action}
+    \STATE agent\_response $\leftarrow$ LLM\_with\_tools.invoke(state.messages)
+    \STATE
+    \STATE \COMMENT{Check if agent wants to use tool}
+    \IF{agent\_response has tool\_calls}
+        \STATE \COMMENT{Execute property search tool}
+        \STATE tool\_results $\leftarrow$ execute\_tool(property\_search\_tool, agent\_response.tool\_calls)
+        \STATE state.messages.append(ToolMessage(tool\_results))
+        \STATE Continue loop
+    \ELSE
+        \STATE \COMMENT{Agent provides final response}
+        \STATE state.response $\leftarrow$ agent\_response.content
+        \STATE state.success $\leftarrow$ true
+        \STATE Break loop
+    \ENDIF
+\ENDWHILE
+\RETURN \{``success'': state.success, ``response'': state.response, ``data'': \{``properties'': extract\_properties\_from\_messages(state.messages)\}\}
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Key Features:}
+\begin{itemize}
+    \item Cyclical agent pattern allowing iterative tool use
+    \item Automatic tool invocation based on LLM decision
+    \item Conversational response generation with embedded search results
+\end{itemize}
+
+\section{External APIs/SDKs}
+
+Describe the third-party APIs/SDKs used in the project implementation in the following table. Few examples of APIs are provided in the table.
+
+\begin{table}[!h]
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{API and version} & \textbf{Description} & \textbf{Purpose of usage} & \textbf{API endpoint/function/class used} \\ \hline
+Groq API (Llama 3.1-8b-instant) & Large Language Model inference service & Natural language understanding, query classification, conversational responses & ChatGroq, llm.invoke(), llm.with\_structured\_output() \\ \hline
+MongoDB Atlas (v4.9.2) & Cloud database with vector search & Property data storage, vector similarity search, builder profiles & db["properties"].aggregate(), \$vectorSearch operator \\ \hline
+Sentence Transformers (v3.2.1) & Pre-trained embedding models & Generate vector embeddings for semantic search & SentenceTransformer("all-MiniLM-L6-v2"), model.encode() \\ \hline
+LangChain (v1.0.0) & AI agent framework & Agent orchestration, tool integration, message handling & LangGraph, StateGraph, ToolNode, ChatPromptTemplate \\ \hline
+LangGraph (v1.0.0) & Multi-agent workflow engine & Agent state management, graph-based routing & StateGraph, add\_node(), add\_conditional\_edges() \\ \hline
+FastAPI (v0.118.0) & Web framework for building APIs & RESTful API endpoints, request handling, WebSocket support & FastAPI(), @app.post(), @app.get() \\ \hline
+Motor (v3.6.0) & Async MongoDB driver & Asynchronous database operations & AsyncIOMotorClient, db.collection.aggregate() \\ \hline
+\end{tabular}%
+}
+\caption{External APIs and SDKs Used in PropPal}
+\label{tab:external_apis}
+\end{table}
+
+\section{Testing Details}
+
+Once the system has been successfully developed, testing has to be performed to ensure that the system working as intended.
+
+\subsection{Unit Testing}
+
+Each unit test is designed to test a specific function or method independently from other components, helping to identify issues directly related to the functionality being tested.
+
+Following is the example of Unit testing:
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|p{2cm}|p{3cm}|p{3.5cm}|p{4cm}|p{3cm}|p{3.5cm}|}
+\hline
+\textbf{Test case ID} & \textbf{Test Objective} & \textbf{Precondition} & \textbf{Steps} & \textbf{Test data} & \textbf{Expected result} \\ \hline
+PS\_TC001 & Verify that the property search function generates embeddings and performs vector similarity search correctly & 
+\begin{minipage}[t]{3.5cm}
+\begin{itemize}
+    \item MongoDB Atlas is accessible
+    \item Properties collection has data with embeddings
+    \item Vector search index is configured
+    \item Embedding service is running
+\end{itemize}
+\end{minipage} & 
+\begin{minipage}[t]{4cm}
+\begin{enumerate}
+    \item Initialize property search tool
+    \item Execute search with natural language query
+    \item Verify embedding generation
+    \item Check vector search results
+    \item Validate result format
+\end{enumerate}
+\end{minipage} & 
+\begin{minipage}[t]{3cm}
+\begin{itemize}
+    \item Query: ``3 bedroom house in Islamabad under 50 lakhs''
+    \item Expected fields: title, price, city, bedrooms
+    \item Result limit: 5
+\end{itemize}
+\end{minipage} & 
+\begin{minipage}[t]{3.5cm}
+\begin{itemize}
+    \item Embedding is generated successfully
+    \item Vector search returns results (HTTP 200 OK)
+    \item Results contain required fields
+    \item ObjectIds are properly serialized as strings
+    \item Results are sorted by similarity score
+\end{itemize}
+\end{minipage} \\ \hline
+\end{tabular}%
+}
+\caption{Unit test case PS\_TC001 for Property Search: Vector similarity search}
+\label{tab:test_property_search}
+\end{table}
+
+\begin{table}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|p{2cm}|p{3cm}|p{3.5cm}|p{4cm}|p{3.2cm}|p{3.3cm}|}
+\hline
+\textbf{Test case ID} & \textbf{Test Objective} & \textbf{Precondition} & \textbf{Steps} & \textbf{Test data} & \textbf{Expected result} \\ \hline
+BA\_TC001 & Verify that the booking agent correctly computes overlap between buyer and seller time slots & 
+\begin{minipage}[t]{3.5cm}
+\begin{itemize}
+    \item Property exists in database
+    \item Seller has availability slots configured
+    \item Booking agent is initialized
+    \item Database connection is available
+\end{itemize}
+\end{minipage} & 
+\begin{minipage}[t]{4cm}
+\begin{enumerate}
+    \item Provide property ID
+    \item Provide buyer preferred time slots
+    \item Execute slot matching function
+    \item Retrieve seller availability
+    \item Compute slot overlap
+    \item Format results for display
+\end{enumerate}
+\end{minipage} & 
+\begin{minipage}[t]{3.2cm}
+\begin{itemize}
+    \item Property ID: ``68ee14d18b40f71b5c6017f1''
+    \item Buyer slots: Two ISO datetime strings (2025-01-20T14:00:00+05:00, 2025-01-20T15:00:00+05:00)
+    \item Seller slots: Pre-configured in database
+\end{itemize}
+\end{minipage} & 
+\begin{minipage}[t]{3.3cm}
+\begin{itemize}
+    \item Slot matching executes successfully
+    \item Overlap computed correctly (set intersection)
+    \item Results include seller\_slots, buyer\_slots, and overlap
+    \item Overlap sorted chronologically
+    \item Human-readable date format generated
+    \item Response status: success = true
+\end{itemize}
+\end{minipage} \\ \hline
+\end{tabular}%
+}
+\caption{Unit test case BA\_TC001 for Booking Agent: Slot matching}
+\label{tab:test_booking_agent}
+\end{table}
+
+\subsection{Integration Testing}
+
+Integration tests verify that multiple components work together correctly. The following integration tests were performed:
+
+\begin{itemize}
+    \item \textbf{Router Agent to Listing Agent:} Verified that property queries are correctly routed and processed
+    \item \textbf{Booking Agent Workflow:} Tested complete booking flow from query to visit creation
+    \item \textbf{Vector Search Pipeline:} Validated end-to-end search from query to result display
+\end{itemize}
+
+\subsection{System Testing}
+
+System-level tests were conducted to ensure the entire PropPal platform functions as intended:
+
+\begin{itemize}
+    \item \textbf{End-to-End Property Search:} Complete user journey from natural language query to property results
+    \item \textbf{Multi-Agent Communication:} Verified agent routing and handoff mechanisms
+    \item \textbf{Database Integration:} Tested MongoDB Atlas connection and vector search performance
+\end{itemize}
+
+% Bibliography section
+% To use this, you need to:
+% 1. Create a references.bib file (or bibliography.bib) with your citations
+% 2. In your main LaTeX document, add:
+%    \bibliographystyle{ieeetr}  % or apa, acm, plain, etc.
+%    \bibliography{references}   % name without .bib extension
+% 3. Compile: pdflatex -> bibtex -> pdflatex -> pdflatex
+
+% If using biblatex (alternative method):
+% \printbibliography
+

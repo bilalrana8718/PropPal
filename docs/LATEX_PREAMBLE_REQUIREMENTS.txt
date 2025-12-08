@@ -1,0 +1,36 @@
+REQUIRED LATEX PACKAGES FOR CHAPTER 4
+=====================================
+
+Add these packages to your LaTeX document preamble (before \begin{document}):
+
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{float}  % For [H] placement option
+
+OR (if you prefer algorithm2e package):
+
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{float}
+
+Note: The current .tex file uses the 'algorithmic' package which is compatible with the 'algorithm' package.
+
+If you want to use algorithm2e instead, you would need to modify the algorithm environments to use:
+\begin{algorithm}[H]
+\caption{...}
+\label{...}
+\KwIn{...}
+\KwOut{...}
+...
+\end{algorithm}
+
+The current format uses:
+\begin{algorithm}[H]
+\caption{...}
+\label{...}
+\begin{algorithmic}[1]
+...
+\end{algorithmic}
+\end{algorithm}
+
+Both approaches work, but the current one (algorithmic) is more commonly used in academic papers.
+

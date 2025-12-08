@@ -55,6 +55,7 @@ class ChatResponse(BaseModel):
     properties: Optional[List[Dict[str, Any]]] = Field(None, description="Properties search results")
     builders: Optional[List[Dict[str, Any]]] = Field(None, description="Builder search results")
     services: Optional[List[Dict[str, Any]]] = Field(None, description="Builder service search results")
+    booking: Optional[List[Dict[str, Any]]] = Field(None, description="Booking suggestions or overlap data")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the response")
 
 
@@ -153,6 +154,7 @@ async def send_message(
                         "properties": result.get("properties"),
                         "builders": result.get("builders"),
                         "services": result.get("services"),
+                        "booking": result.get("booking"),
                     },
                 }
 
@@ -177,6 +179,7 @@ async def send_message(
             properties=result.get("properties"),
             builders=result.get("builders"),
             services=result.get("services"),
+            booking=result.get("booking"),
             error=None,
             metadata=metadata
         )
