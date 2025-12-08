@@ -18,6 +18,7 @@ load_dotenv()
 # Import the ListingAgent
 from agents.listing.agent import ListingAgent
 from .builder.agent import BuilderAgent
+from .booking.agent import BookingAgent
 
 # --- Define the Router's State ---
 # This is the state for the *main orchestrator* graph.
@@ -39,6 +40,7 @@ class RouterState(TypedDict):
     properties: List[dict]
     builders: List[dict]
     services: List[dict]
+    booking: List[dict]
 
 # --- LLM and Router Definition ---
 
@@ -54,7 +56,7 @@ llm = ChatGroq(
 class RouteQuery(BaseModel):
     """Classify the user's query to route it to the correct agent."""
     destination: str = Field(
-        description="The destination node. Must be one of 'listing_agent', 'builder_agent', or 'general_chat'."
+        description="The destination node. Must be one of 'listing_agent', 'builder_agent', 'booking_agent', or 'general_chat'."
     )
 
 # Bind the structured output to the LLM
@@ -69,6 +71,10 @@ def get_listing_agent():
 def get_builder_agent():
     """Get a fresh instance of BuilderAgent."""
     return BuilderAgent()
+
+def get_booking_agent():
+    """Get a fresh instance of BookingAgent."""
+    return BookingAgent()
 
 # In the future, you could add:
 # def get_financial_agent():
@@ -93,6 +99,7 @@ def classify_intent_node(state: RouterState):
             "property, listings, houses, apartments, buying, selling, renting, "
             "property search, property details, or property prices. "
             "Respond with 'builder_agent' if the query is about builders, contractors, construction, renovation, creating a builder profile, or creating a builder service. "
+            "Respond with 'booking_agent' if the query mentions booking a visit, scheduling a tour, arranging a viewing, picking a time to see a property, confirming a visit slot, or rescheduling/cancelling a visit. "
             "For anything else (like 'hello', 'how are you', 'who are you?', "
             "general questions, platform help, etc.), respond with 'general_chat'."
             # "In the future, you might also route to 'financial_agent' "
@@ -229,6 +236,57 @@ def builder_agent_node(state: RouterState):
         pass
 
     return response_payload
+
+def booking_agent_node(state: RouterState):
+    """
+    Node that delegates to BookingAgent for visit scheduling.
+    """
+    print("--- [Main Graph] Routing to Booking Agent ---")
+    query = state['query']
+    clerk_id = state.get('clerk_id')
+    
+    # Resolve clerk_id to internal buyer_id
+    buyer_id = None
+    if clerk_id:
+        try:
+            from common.repositories.user_repository import get_user_repository
+            import asyncio
+            
+            async def get_buyer_id():
+                user_repo = get_user_repository()
+                user = await user_repo.get_user_by_clerk_id(clerk_id)
+                return str(user.id) if user and hasattr(user, 'id') else None
+            
+            # Run async in new loop
+            def run_in_new_loop():
+                new_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(new_loop)
+                try:
+                    return new_loop.run_until_complete(get_buyer_id())
+                finally:
+                    new_loop.close()
+            
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(run_in_new_loop)
+                buyer_id = future.result(timeout=5)
+        except Exception as e:
+            print(f"--- [Main Graph] Failed to resolve buyer_id: {e}")
+            buyer_id = None
+
+    booking_agent = get_booking_agent()
+    result = booking_agent.process_query(query, buyer_id=buyer_id)
+
+    response_message = result.get("response", "An error occurred in the booking agent.")
+    booking_data = result.get("data", {})
+
+    if not result.get("success"):
+        print(f"--- [Main Graph] Booking Agent Error: {result.get('error')}")
+
+    return {
+        "messages": [AIMessage(content=response_message)],
+        "booking": [booking_data] if booking_data else [],
+    }
 # --- Conditional Routing Function ---
 
 def route_after_classification(state: RouterState):
@@ -242,6 +300,8 @@ def route_after_classification(state: RouterState):
         return "listing_agent_node"
     elif classification == "builder_agent":
         return "builder_agent_node"
+    elif classification == "booking_agent":
+        return "booking_agent_node"
     # elif classification == "financial_agent":
     #     return "financial_agent_node" # For the future
     else:
@@ -257,6 +317,7 @@ workflow.add_node("classifier", classify_intent_node)
 workflow.add_node("general_chat_node", general_chat_node)
 workflow.add_node("listing_agent_node", listing_agent_node)
 workflow.add_node("builder_agent_node", builder_agent_node)
+workflow.add_node("booking_agent_node", booking_agent_node)
 # In the future, you'd add more agent nodes here
 
 # 2. Define the entry point
@@ -271,6 +332,7 @@ workflow.add_conditional_edges(
         "listing_agent_node": "listing_agent_node",
         "general_chat_node": "general_chat_node",
         "builder_agent_node": "builder_agent_node",
+        "booking_agent_node": "booking_agent_node",
         # "financial_agent_node": "financial_agent_node" # For the future
     }
 )
@@ -280,6 +342,7 @@ workflow.add_conditional_edges(
 workflow.add_edge("general_chat_node", END)
 workflow.add_edge("listing_agent_node", END)
 workflow.add_edge("builder_agent_node", END)
+workflow.add_edge("booking_agent_node", END)
 # workflow.add_edge("financial_agent_node", END) # For the future
 
 # 5. Compile the main graph
@@ -329,6 +392,7 @@ class RouterAgent:
                 properties=[],
                 builders=[],
                 services=[],
+                booking=[],
             )
             
             # Run the router workflow
@@ -348,6 +412,7 @@ class RouterAgent:
                 "properties": final_state.get("properties", []),
                 "builders": final_state.get("builders", []),
                 "services": final_state.get("services", []),
+                "booking": final_state.get("booking", []),
                 "error": None
             }
 
