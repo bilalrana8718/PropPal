@@ -173,7 +173,7 @@ export default function BookingChat({ property }: { property: Property }) {
 
       // Only send initial message if no history was loaded
       setTimeout(() => {
-        sendMessage(`I want to book a visit for property ${property._id}`, false)
+        sendMessage(`I want to visit this property`, false)
       }, 1000)
     }
 
