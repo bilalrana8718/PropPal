@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation'
 import { useMemo, useEffect, useState } from 'react'
 import { HomeIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import SellerVisitsInbox from './SellerVisitsInbox'
 
 const segments = [
   { href: '/', label: 'Home' },
@@ -20,6 +22,7 @@ const LAST_SECTION_KEY = 'proppal_last_section'
 
 export default function Topbar() {
   const pathname = usePathname()
+  const { user } = useCurrentUser()
   const [lastSection, setLastSection] = useState<string>('/')
   
   // Check if we're on the messages page
@@ -114,11 +117,10 @@ export default function Topbar() {
                 <Link
                   key={r.href}
                   href={r.href}
-                  className={`flex items-center justify-center text-sm font-medium transition-colors ${
-                    idx === activeIndex
+                  className={`flex items-center justify-center text-sm font-medium transition-colors ${idx === activeIndex
                       ? 'text-white'
                       : 'text-slate-700 hover:text-[color:var(--color-primary)]'
-                  }`}
+                    }`}
                   style={{ fontFamily: 'var(--font-sans)' }}
                 >
                   {r.label}
@@ -134,6 +136,10 @@ export default function Topbar() {
           >
             Profile
           </Link>
+
+          {/* Seller Visits Inbox - Visible for all users */}
+          <SellerVisitsInbox />
+
           <div className="ml-1">
             <UserButton afterSignOutUrl="/" />
           </div>

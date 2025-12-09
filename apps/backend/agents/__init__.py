@@ -5,6 +5,7 @@ from .router_agent import RouterAgent
 from .builder.agent import BuilderAgent
 from .projects.project_form_extraction_agent import ProjectFormExtractionAgent
 from .projects.bid_form_extraction_agent import BidFormExtractionAgent
+from .booking.agent import BookingAgent
 
 __all__ = [
     "ListingAgent",
@@ -12,4 +13,4 @@ __all__ = [
     "BuilderAgent",
     "ProjectFormExtractionAgent",
     "BidFormExtractionAgent",
-]
+    "BookingAgent"]

@@ -32,6 +32,7 @@ from api.projects.router import router as projects_router  # noqa: E402
 from api.bids.router import router as bids_router  # noqa: E402
 from api.conversations.router import router as conversations_router  # noqa: E402
 from api.recommendations.router import router as recommendations_router
+from api.booking.router import router as booking_router
 
 
 @asynccontextmanager
@@ -102,6 +103,7 @@ app.include_router(projects_router)
 app.include_router(bids_router)
 app.include_router(conversations_router)
 app.include_router(recommendations_router)
+app.include_router(booking_router)
 
 # Import and include storage router
 from api.storage.router import router as storage_router

@@ -55,6 +55,7 @@ class ChatResponse(BaseModel):
     properties: Optional[List[Dict[str, Any]]] = Field(None, description="Properties search results")
     builders: Optional[List[Dict[str, Any]]] = Field(None, description="Builder search results")
     services: Optional[List[Dict[str, Any]]] = Field(None, description="Builder service search results")
+    booking: Optional[List[Dict[str, Any]]] = Field(None, description="Booking suggestions or overlap data")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the response")
 
 
@@ -106,9 +107,63 @@ async def send_message(
                 detail="Message cannot be empty"
             )
         
-        # Process the query through the RouterAgent
+        # Retrieve recent conversation history for context-aware classification
+        conversation_history = []
+        booking_mode = False  # Track if we're in booking mode
+        
+        if request.session_id and (request.clerk_id or request.user_id):
+            try:
+                # Resolve user_id for history lookup
+                history_user_id = None
+                if request.clerk_id:
+                    user = await user_repo.get_user_by_clerk_id(request.clerk_id)
+                    if user and getattr(user, "id", None):
+                        history_user_id = ObjectId(str(user.id))
+                elif request.user_id and ObjectId.is_valid(request.user_id):
+                    history_user_id = ObjectId(request.user_id)
+                
+                if history_user_id:
+                    # Fetch chat history document
+                    history_doc = await db["chat_histories"].find_one({
+                        "user_id": history_user_id,
+                        "session_id": request.session_id
+                    })
+                    
+                    if history_doc and "messages" in history_doc:
+                        # Get last 10 messages for context (5 exchanges)
+                        recent_messages = history_doc["messages"][-10:]
+                        conversation_history = [
+                            {
+                                "role": msg["role"],
+                                "content": msg["content"],
+                                "_payload": msg.get("_payload", {})  # Include payload for booking data
+                            }
+                            for msg in recent_messages
+                        ]
+                        
+                        # Check if we're in booking mode (recent booking agent interactions)
+                        # Look at last 3 assistant messages to see if any were from booking_agent
+                        assistant_messages = [msg for msg in recent_messages if msg.get("role") == "assistant"]
+                        if assistant_messages:
+                            # Check last 3 assistant messages
+                            for msg in assistant_messages[-3:]:
+                                payload = msg.get("_payload", {})
+                                if payload.get("classification") == "booking_agent" or payload.get("booking"):
+                                    booking_mode = True
+                                    logger.info(f"[BOOKING MODE] Detected from conversation history")
+                                    break
+            except Exception as e:
+                logger.warning(f"Failed to retrieve conversation history: {e}")
+                conversation_history = []
+        
+        # Process the query through the RouterAgent WITH conversation history and booking_mode
         agent = get_router_agent()
-        result = agent.process_query(request.message.strip(), clerk_id=request.clerk_id)
+        result = agent.process_query(
+            request.message.strip(),
+            clerk_id=request.clerk_id,
+            conversation_history=conversation_history,
+            booking_mode=booking_mode
+        )
         
         # Check if the agent processing was successful
         if not result.get("success", False):
@@ -153,6 +208,7 @@ async def send_message(
                         "properties": result.get("properties"),
                         "builders": result.get("builders"),
                         "services": result.get("services"),
+                        "booking": result.get("booking"),
                     },
                 }
 
@@ -177,6 +233,7 @@ async def send_message(
             properties=result.get("properties"),
             builders=result.get("builders"),
             services=result.get("services"),
+            booking=result.get("booking"),
             error=None,
             metadata=metadata
         )
@@ -190,6 +247,109 @@ async def send_message(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+
+
+@router.get("/sessions")
+async def get_chat_sessions(
+    user_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Get all chat sessions for a user.
+    Excludes booking sessions (those are only shown in BookingChat).
+    
+    Args:
+        user_id: MongoDB ObjectId of the user
+    """
+    try:
+        # Validate user_id
+        if not ObjectId.is_valid(user_id):
+            raise HTTPException(status_code=400, detail="Invalid user_id format")
+        
+        user_oid = ObjectId(user_id)
+        
+        # Fetch all chat sessions for this user
+        # EXCLUDE booking sessions (those start with "booking_")
+        sessions = await db["chat_histories"].find({
+            "user_id": user_oid,
+            "session_id": {"$not": {"$regex": "^booking_"}}  # Exclude booking sessions
+        }).sort("updated_at", -1).to_list(length=50)
+        
+        # Format sessions
+        session_list = []
+        for session in sessions:
+            messages = session.get("messages", [])
+            last_message = messages[-1] if messages else None
+            
+            session_list.append({
+                "session_id": session.get("session_id"),
+                "last_message": last_message.get("content", "") if last_message else "",
+                "updated_at": session.get("updated_at").isoformat() if session.get("updated_at") else None,
+                "message_count": len(messages)
+            })
+        
+        return {
+            "success": True,
+            "sessions": session_list
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve chat sessions: {str(e)}"
+        )
+
+
+@router.get("/history")
+async def get_chat_history(
+    user_id: str,
+    session_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Retrieve chat history for a specific user and session.
+    
+    Args:
+        user_id: MongoDB ObjectId of the user
+        session_id: Session identifier
+    """
+    try:
+        # Validate user_id
+        if not ObjectId.is_valid(user_id):
+            raise HTTPException(status_code=400, detail="Invalid user_id format")
+        
+        user_oid = ObjectId(user_id)
+        
+        # Fetch chat history
+        history_doc = await db["chat_histories"].find_one({
+            "user_id": user_oid,
+            "session_id": session_id
+        })
+        
+        if not history_doc:
+            return {"success": True, "messages": []}
+        
+        # Return messages
+        messages = history_doc.get("messages", [])
+        
+        return {
+            "success": True,
+            "messages": messages,
+            "session_id": session_id,
+            "created_at": history_doc.get("created_at"),
+            "updated_at": history_doc.get("updated_at")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve chat history: {str(e)}"
+        )
+
 
 
 # =============================

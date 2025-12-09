@@ -19,6 +19,7 @@ import {
   BanknotesIcon,
 } from '@heroicons/react/24/outline'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import {

@@ -5,7 +5,7 @@ Routes user queries to the appropriate specialized agent.
 
 import operator
 import os
-from typing import TypedDict, Annotated, List, Optional
+from typing import TypedDict, Annotated, List, Optional, Dict
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -18,6 +18,7 @@ load_dotenv()
 # Import the ListingAgent
 from agents.listing.agent import ListingAgent
 from .builder.agent import BuilderAgent
+from .booking.agent import BookingAgent
 
 # --- Define the Router's State ---
 # This is the state for the *main orchestrator* graph.
@@ -39,9 +40,16 @@ class RouterState(TypedDict):
     properties: List[dict]
     builders: List[dict]
     services: List[dict]
+    booking: List[dict]
     
     # Metadata for additional information (like interactive session flags)
     metadata: Optional[dict]
+    
+    # Conversation history for context-aware classification
+    conversation_history: Optional[List[Dict[str, str]]]
+    
+    # Booking mode flag - when True, stay in booking context
+    booking_mode: Optional[bool]
 
 # --- LLM and Router Definition ---
 
@@ -57,11 +65,11 @@ llm = ChatGroq(
 class RouteQuery(BaseModel):
     """Classify the user's query to route it to the correct agent."""
     destination: str = Field(
-        description="The destination node. Must be one of 'listing_agent', 'builder_agent', or 'general_chat'."
+        description="The destination node. Must be one of 'listing_agent', 'builder_agent', 'booking_agent', or 'general_chat'."
     )
 
 # Bind the structured output to the LLM
-structured_llm = llm.with_structured_output(RouteQuery)
+classify_llm = llm.with_structured_output(RouteQuery)
 
 # --- Agent Factory Functions ---
 # We create fresh instances of agents to avoid state issues
@@ -72,6 +80,10 @@ def get_listing_agent():
 def get_builder_agent():
     """Get a fresh instance of BuilderAgent."""
     return BuilderAgent()
+
+def get_booking_agent():
+    """Get a fresh instance of BookingAgent."""
+    return BookingAgent()
 
 # In the future, you could add:
 # def get_financial_agent():
@@ -85,62 +97,104 @@ def get_builder_agent():
 def classify_intent_node(state: RouterState):
     """
     This is the first node that runs. It classifies the user's query.
+    Uses conversation history for context-aware classification.
+    If in booking_mode, handles classification differently.
     """
     print("--- [Main Graph] Classifying Intent ---")
     query = state['query']
+    conversation_history = state.get('conversation_history', [])
+    booking_mode = state.get('booking_mode', False)
+    
+    # If we're in booking mode, check if this is a booking-related query
+    if booking_mode:
+        print("--- [Main Graph] BOOKING MODE ACTIVE - Checking query type ---")
+        query_lower = query.lower().strip()
+        
+        # Keywords that indicate booking-related conversation
+        booking_keywords = [
+            'yes', 'no', 'confirm', 'book', 'schedule', 'visit', 'viewing', 'tour',
+            'available', 'time', 'slot', 'monday', 'tuesday', 'wednesday', 'thursday',
+            'friday', 'saturday', 'sunday', 'tomorrow', 'today', 'morning', 'afternoon',
+            'evening', 'am', 'pm', 'property', 'seller', 'cancel', 'reschedule'
+        ]
+        
+        # Check if query contains booking keywords
+        is_booking_related = any(keyword in query_lower for keyword in booking_keywords)
+        
+        if is_booking_related:
+            print("--- [Main Graph] Query is booking-related, routing to booking_agent ---")
+            return {"classification": "booking_agent"}
+        else:
+            # Off-topic question in booking mode - handle with general chat
+            print("--- [Main Graph] Off-topic question in booking mode, using general_chat ---")
+            return {"classification": "general_chat"}
+    
+    # Normal classification flow (not in booking mode)
+    # Build context from history
+    context_str = ""
+    if conversation_history:
+        # Get last 4 messages (2 exchanges) for context
+        recent = conversation_history[-4:]
+        context_lines = [f"{msg['role']}: {msg['content']}" for msg in recent]
+        context_str = "\n".join(context_lines)
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", (
-            "You are an expert router for PropPal, a real estate platform. Your job is to classify the user's query. "
-            "Respond with 'listing_agent' if they are asking about real estate, "
-            "property, listings, houses, apartments, buying, selling, renting, "
-            "property search, property details, or property prices. "
-            "Respond with 'builder_agent' if the query is about:\n"
-            "- Builders, contractors, construction companies, or construction professionals\n"
-            "- Builder services (plumbing, electrical, interior design, renovation, remodeling, "
-            "kitchen remodeling, bathroom renovation, roof repair, painting, tiling, flooring, "
-            "home construction, commercial construction, infrastructure, etc.)\n"
-            "- Finding or searching for builders or builder services\n"
-            "- Creating a builder profile or creating a builder service\n"
-            "- Any service-related queries (e.g., 'who can do plumbing', 'find interior designers', "
-            "'I need electrical work', 'kitchen renovation services')\n\n"
-            "For anything else (like 'hello', 'how are you', 'who are you?', "
-            "general questions, platform help, etc.), respond with 'general_chat'."
-            # "In the future, you might also route to 'financial_agent' "
-            # "for mortgage questions."
+            "You are an expert router for PropPal, a real estate platform. "
+            "Your job is to classify the user's query based on the current message AND conversation context.\n\n"
+            "CONVERSATION CONTEXT (recent messages):\n{context}\n\n"
+            "CLASSIFICATION RULES:\n"
+            "- If the user is responding to a booking confirmation question (e.g., 'yes', 'confirm', 'book it', 'sure') "
+            "AND the last assistant message asked about confirming a visit or mentioned 'Should I confirm', classify as 'booking_agent'\n"
+            "- If asking about properties, listings, houses, apartments, buying, selling, renting: 'listing_agent'\n"
+            "- If asking about builders, contractors, construction companies, or construction professionals: 'builder_agent'\n"
+            "- If asking about builder services (plumbing, electrical, interior design, renovation, etc.): 'builder_agent'\n"
+            "- If asking about booking visits, scheduling tours, arranging viewings: 'booking_agent'\n"
+            "- For general questions, greetings, platform help: 'general_chat'\n"
         )),
         ("human", "{query}")
     ])
     
-    # Create the classification chain
-    chain = prompt | structured_llm
+    chain = prompt | classify_llm
+    result = chain.invoke({"query": query, "context": context_str})
     
-    # Invoke the chain and get the structured result
-    result = chain.invoke({"query": query})
-    
-    print(f"--- [Main Graph] Classification: {result.destination} ---")
-    # Update the state with the classification
+    print(f"--- [Main Graph] Classification: {result.destination} (with context: {bool(context_str)}) ---")
     return {"classification": result.destination}
 
 def general_chat_node(state: RouterState):
     """
     This node handles all non-property-related queries (e.g., "Hello").
+    In booking mode, provides brief answers to off-topic questions.
     """
     print("--- [Main Graph] Executing General Chat ---")
     query = state['query']
+    booking_mode = state.get('booking_mode', False)
     
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", (
-            "You are a helpful assistant for PropPal, a real estate platform. "
-            "You can help users with general questions about the platform, "
-            "account issues, or general conversation. You do *not* search for properties. "
-            "If users ask about property-related topics, politely redirect them to "
-            "ask about specific property searches."
-        )),
-        ("human", "{query}")
-    ])
+    if booking_mode:
+        # In booking mode, give brief answers and redirect back to booking
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are a helpful assistant for PropPal's booking system. "
+                "The user is currently in a property visit booking conversation. "
+                "Answer their question briefly (1-2 sentences max), then gently remind them "
+                "that you're here to help them schedule their property visit. "
+                "Keep responses short and friendly."
+            )),
+            ("human", "{query}")
+        ])
+    else:
+        # Normal general chat
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are a helpful assistant for PropPal, a real estate platform. "
+                "You can help users with general questions about the platform, "
+                "account issues, or general conversation. You do *not* search for properties. "
+                "If users ask about property-related topics, politely redirect them to "
+                "ask about specific property searches."
+            )),
+            ("human", "{query}")
+        ])
     
-    # Use the same LLM or a different one
     chain = prompt | llm
     result = chain.invoke({"query": query})
     
@@ -148,27 +202,18 @@ def general_chat_node(state: RouterState):
 
 def listing_agent_node(state: RouterState):
     """
-    This node acts as a "client" to your ListingAgent class.
-    It calls the agent's public API and formats the response for the graph.
+    Acts as a client to ListingAgent and formats the response.
     """
     print("--- [Main Graph] Routing to Listing Agent ---")
     query = state['query']
-    
-    # Create a fresh instance of ListingAgent to avoid state issues
     listing_agent = get_listing_agent()
-    
-    # Call the .process_query() method from your imported agent
-    # This is the key: we are calling the compiled agent's public method.
     result = listing_agent.process_query(query)
     
-    # The agent's public API returns a dict.
-    # We'll use the 'response' field for the chat history.
     response_message = result.get("response", "An error occurred in the listing agent.")
     properties = result.get("properties", [])
     
     if not result.get("success"):
         print(f"--- [Main Graph] Listing Agent Error: {result.get('error')}")
-        # Even if it fails, we pass the error message back to the user
         
     return {
         "messages": [AIMessage(content=response_message)],
@@ -177,20 +222,15 @@ def listing_agent_node(state: RouterState):
 
 def builder_agent_node(state: RouterState):
     """
-    This node acts as a "client" to the BuilderAgent class.
-    It calls the agent's public API and formats the response for the graph.
+    Acts as a client to BuilderAgent and formats the response.
     """
     print("--- [Main Graph] Routing to Builder Agent ---")
     query = state['query']
     clerk_id = state.get('clerk_id')
 
-    # Create a fresh instance of BuilderAgent
     builder_agent = get_builder_agent()
-
-    # Call the .process_query() method, passing along clerk_id
     result = builder_agent.process_query(query, clerk_id=clerk_id)
 
-    # Debug: log raw result from BuilderAgent
     try:
         print("--- [Main Graph] Raw BuilderAgent result:", {
             "keys": list(result.keys()),
@@ -204,15 +244,12 @@ def builder_agent_node(state: RouterState):
         pass
 
     response_message = result.get("response", "An error occurred in the builder agent.")
-    # Normalize outputs: split generic 'results' into builders vs services when needed
     raw_results = result.get("results", [])
     builders = result.get("builders", [])
     services = result.get("services", [])
     if raw_results and (not builders or not services):
-        tmp_builders = []
-        tmp_services = []
+        tmp_builders, tmp_services = [], []
         for item in raw_results:
-            # Heuristic: service results contain service fields
             if any(k in item for k in ["service_name", "builder_id", "category", "price_range_min", "price_range_max"]):
                 tmp_services.append(item)
             else:
@@ -229,12 +266,9 @@ def builder_agent_node(state: RouterState):
         "builders": builders,
         "services": services,
     }
-    
-    # Pass through metadata if present (for interactive session flags)
     if result.get("metadata"):
         response_payload["metadata"] = result["metadata"]
 
-    # Debug: log normalized payload back to the main graph
     try:
         print("--- [Main Graph] BuilderAgent normalized payload:", {
             "builders_len": len(response_payload["builders"] or []),
@@ -245,12 +279,64 @@ def builder_agent_node(state: RouterState):
         pass
 
     return response_payload
+
+def booking_agent_node(state: RouterState):
+    """
+    Delegates to BookingAgent for visit scheduling.
+    """
+    print("--- [Main Graph] Routing to Booking Agent ---")
+    query = state['query']
+    clerk_id = state.get('clerk_id')
+    conversation_history = state.get('conversation_history', [])
+    
+    buyer_id = None
+    if clerk_id:
+        try:
+            # Use synchronous MongoDB client to avoid event loop issues
+            from pymongo import MongoClient
+            import os
+            
+            # Get MongoDB URI from environment
+            mongo_uri = os.getenv("MONGODB_URL")
+            if mongo_uri:
+                # Create synchronous client
+                client = MongoClient(mongo_uri)
+                db = client["proppal"]
+                
+                # Query user by clerk_id
+                user_doc = db.users.find_one({"clerk_id": clerk_id})
+                if user_doc and "_id" in user_doc:
+                    buyer_id = str(user_doc["_id"])
+                
+                # Close client
+                client.close()
+        except Exception as e:
+            print(f"--- [Main Graph] Failed to resolve buyer_id: {e}")
+            buyer_id = None
+
+    booking_agent = get_booking_agent()
+    result = booking_agent.process_query(
+        query,
+        buyer_id=buyer_id,
+        conversation_history=conversation_history
+    )
+
+    response_message = result.get("response", "An error occurred in the booking agent.")
+    booking_data = result.get("data", {})
+
+    if not result.get("success"):
+        print(f"--- [Main Graph] Booking Agent Error: {result.get('error')}")
+
+    return {
+        "messages": [AIMessage(content=response_message)],
+        "booking": [booking_data] if booking_data else [],
+    }
+
 # --- Conditional Routing Function ---
 
 def route_after_classification(state: RouterState):
     """
-    This function reads the 'classification' from the state
-    and returns the name of the *next* node to run.
+    Reads 'classification' from state and returns the next node.
     """
     classification = state.get("classification")
     
@@ -258,72 +344,67 @@ def route_after_classification(state: RouterState):
         return "listing_agent_node"
     elif classification == "builder_agent":
         return "builder_agent_node"
-    # elif classification == "financial_agent":
-    #     return "financial_agent_node" # For the future
+    elif classification == "booking_agent":
+        return "booking_agent_node"
     else:
-        # Route to the general chat node
         return "general_chat_node"
 
 # --- Build the Main Router Graph ---
 
 workflow = StateGraph(RouterState)
-
-# 1. Add the nodes
 workflow.add_node("classifier", classify_intent_node)
 workflow.add_node("general_chat_node", general_chat_node)
 workflow.add_node("listing_agent_node", listing_agent_node)
 workflow.add_node("builder_agent_node", builder_agent_node)
-# In the future, you'd add more agent nodes here
+workflow.add_node("booking_agent_node", booking_agent_node)
 
-# 2. Define the entry point
 workflow.set_entry_point("classifier")
 
-# 3. Add the conditional router edge
 workflow.add_conditional_edges(
-    "classifier", # Start node
-    route_after_classification, # Function that decides the route
+    "classifier",
+    route_after_classification,
     {
-        # Mapping: 'classification' -> 'node_name'
         "listing_agent_node": "listing_agent_node",
         "general_chat_node": "general_chat_node",
         "builder_agent_node": "builder_agent_node",
-        # "financial_agent_node": "financial_agent_node" # For the future
+        "booking_agent_node": "booking_agent_node",
     }
 )
 
-# 4. Define the end points
-#    After any agent node runs, the graph ends.
 workflow.add_edge("general_chat_node", END)
 workflow.add_edge("listing_agent_node", END)
 workflow.add_edge("builder_agent_node", END)
-# workflow.add_edge("financial_agent_node", END) # For the future
+workflow.add_edge("booking_agent_node", END)
 
-# 5. Compile the main graph
 router_agent_app = workflow.compile()
-
 
 # --- Public API for the Router Agent ---
 
 class RouterAgent:
     """
     Public interface for the Router Agent.
-    This provides a clean API for external use.
+    Provides a clean API for external use.
     """
     
     def __init__(self):
         self.app = router_agent_app
         self.name = "RouterAgent"
     
-    def process_query(self, query: str, clerk_id: Optional[str] = None) -> dict:
+    def process_query(
+        self,
+        query: str,
+        clerk_id: Optional[str] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        booking_mode: bool = False
+    ) -> dict:
         """
         Process a user query through the router agent.
         
         Args:
-            query: The user's query string
-            clerk_id: The user's Clerk ID (optional).
-            
-        Returns:
-            dict: Response containing success, response, and metadata
+            query: The user's query/message
+            clerk_id: Optional Clerk user ID for authentication
+            conversation_history: Optional list of recent messages for context
+            booking_mode: If True, stay in booking context and handle off-topic with general chat
         """
         if not query or not query.strip():
             return {
@@ -332,11 +413,12 @@ class RouterAgent:
                 "classification": "error",
                 "properties": [],
                 "builders": [],
+                "services": [],
+                "booking": [],
                 "error": "Empty query provided"
             }
         
         try:
-            # Create initial state
             initial_state = RouterState(
                 query=query.strip(),
                 clerk_id=clerk_id,
@@ -345,13 +427,14 @@ class RouterAgent:
                 properties=[],
                 builders=[],
                 services=[],
+                booking=[],
                 metadata=None,
+                conversation_history=conversation_history or [],
+                booking_mode=booking_mode
             )
             
-            # Run the router workflow
             final_state = self.app.invoke(initial_state)
             
-            # Extract the final response from the last message
             if final_state.get("messages"):
                 final_message = final_state["messages"][-1]
                 response_content = final_message.content if hasattr(final_message, 'content') else str(final_message)
@@ -365,14 +448,13 @@ class RouterAgent:
                 "properties": final_state.get("properties", []),
                 "builders": final_state.get("builders", []),
                 "services": final_state.get("services", []),
+                "booking": final_state.get("booking", []),
                 "error": None
             }
-            
-            # Include metadata if present
+
             if final_state.get("metadata"):
                 response_obj["metadata"] = final_state["metadata"]
 
-            # Debug: log router final response summary
             try:
                 print("--- [Main Graph] Router final response summary:", {
                     "classification": response_obj["classification"],
@@ -391,5 +473,7 @@ class RouterAgent:
                 "classification": "error",
                 "properties": [],
                 "builders": [],
+                "services": [],
+                "booking": [],
                 "error": str(e)
             }

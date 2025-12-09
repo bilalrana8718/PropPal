@@ -8,7 +8,7 @@ import { UserButton } from '@clerk/nextjs'
 import ChatSidebar from '@/components/ChatSidebar'
 import Link from 'next/link'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
