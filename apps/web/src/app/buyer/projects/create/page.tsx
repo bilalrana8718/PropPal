@@ -4,65 +4,78 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { motion, AnimatePresence } from 'framer-motion'
+import Link from 'next/link'
 import {
   MicrophoneIcon,
   StopIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
   SparklesIcon,
-  PhotoIcon,
+  PlusIcon,
   XMarkIcon,
+  ArrowLeftIcon,
 } from '@heroicons/react/24/outline'
 
-interface PropertyFormData {
+interface ProjectFormData {
   title: string
   description: string
-  price: string
-  property_type: string
-  area_sqft: string
-  bedrooms: string
-  bathrooms: string
-  floors: string
+  project_type: string
+  budget_min: string
+  budget_max: string
+  location: string
   city: string
-  area: string
-  lng: string
-  lat: string
-  images: string[]
+  timeline: string
+  requirements: string[]
 }
 
-const REQUIRED_FIELDS: (keyof PropertyFormData)[] = [
+const REQUIRED_FIELDS: (keyof Omit<ProjectFormData, 'requirements'>)[] = [
   'title',
   'description',
-  'price',
-  'property_type',
-  'area_sqft',
-  'bedrooms',
-  'bathrooms',
+  'project_type',
+  'budget_min',
+  'budget_max',
   'city',
-  'area',
 ]
 
-export default function CreateListingPage() {
+const PROJECT_TYPES = [
+  { value: 'construction', label: 'New Construction' },
+  { value: 'renovation', label: 'Renovation' },
+  { value: 'interior', label: 'Interior Design' },
+  { value: 'plumbing', label: 'Plumbing' },
+  { value: 'electrical', label: 'Electrical Work' },
+  { value: 'painting', label: 'Painting' },
+  { value: 'flooring', label: 'Flooring' },
+  { value: 'roofing', label: 'Roofing' },
+  { value: 'landscaping', label: 'Landscaping' },
+  { value: 'kitchen', label: 'Kitchen Remodel' },
+  { value: 'bathroom', label: 'Bathroom Remodel' },
+  { value: 'hvac', label: 'HVAC' },
+  { value: 'other', label: 'Other' },
+]
+
+const CITIES = [
+  'Islamabad', 'Karachi', 'Lahore', 'Rawalpindi', 'Peshawar',
+  'Quetta', 'Faisalabad', 'Multan', 'Hyderabad', 'Sialkot',
+]
+
+export default function CreateProjectPage() {
   const { user, isAuthenticated, clerkId, loading } = useCurrentUser()
   const router = useRouter()
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
-  const [formData, setFormData] = useState<PropertyFormData>({
+  const [formData, setFormData] = useState<ProjectFormData>({
     title: '',
     description: '',
-    price: '',
-    property_type: '',
-    area_sqft: '',
-    bedrooms: '',
-    bathrooms: '',
-    floors: '1',
+    project_type: '',
+    budget_min: '',
+    budget_max: '',
+    location: '',
     city: '',
-    area: '',
-    lng: '',
-    lat: '',
-    images: [],
+    timeline: '',
+    requirements: [],
   })
 
+  const [newRequirement, setNewRequirement] = useState('')
   const [isVoiceMode, setIsVoiceMode] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -73,10 +86,8 @@ export default function CreateListingPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [partialTranscript, setPartialTranscript] = useState<string>('')
   const [accumulatedTranscript, setAccumulatedTranscript] = useState<string>('')
-  const [uploadingImages, setUploadingImages] = useState(false)
-  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false)
   const [uploadingAudio, setUploadingAudio] = useState(false)
-  const audioInputRef = useRef<HTMLInputElement>(null)
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false)
 
   // Query queue system
   interface QueuedQuery {
@@ -98,14 +109,15 @@ export default function CreateListingPage() {
   const queryTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const currentQueryIdRef = useRef<string | null>(null)
   const isRecordingRef = useRef<boolean>(false)
+  const audioInputRef = useRef<HTMLInputElement>(null)
 
   // Initialize session ID
   useEffect(() => {
     try {
-      const key = 'property_listing_session_id'
+      const key = 'project_creation_session_id'
       let sid = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null
       if (!sid) {
-        sid = `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+        sid = `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
         window.localStorage.setItem(key, sid)
       }
       sessionIdRef.current = sid
@@ -114,36 +126,62 @@ export default function CreateListingPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.push('/sign-in')
+    }
+  }, [loading, isAuthenticated, router])
+
   // Sync queryQueueRef with state
   useEffect(() => {
     queryQueueRef.current = queryQueue
   }, [queryQueue])
 
+  // Calculate progress percentage
+  const calculateProgress = useCallback(() => {
+    const totalRequired = REQUIRED_FIELDS.length
+    let filledFields = 0
+    REQUIRED_FIELDS.forEach((field) => {
+      const value = formData[field]
+      if (value && String(value).trim() !== '') {
+        filledFields++
+      }
+    })
+    return Math.round((filledFields / totalRequired) * 100)
+  }, [formData])
+
+  // Get list of missing required fields
+  const getMissingFieldsList = useCallback(() => {
+    const missing: string[] = []
+    REQUIRED_FIELDS.forEach((field) => {
+      const value = formData[field]
+      if (!value || String(value).trim() === '') {
+        missing.push(field)
+      }
+    })
+    return missing
+  }, [formData])
+
+  // Handle input changes
+  const handleInputChange = useCallback((field: keyof ProjectFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }, [])
+
   // Process next query from queue
   const processNextQuery = useCallback(() => {
-    // Don't process if already processing or WebSocket not ready
     if (
       isProcessingQueryRef.current ||
       !wsRef.current ||
       wsRef.current.readyState !== WebSocket.OPEN
     ) {
-      console.log(
-        '⏸️ Cannot process: processing=',
-        isProcessingQueryRef.current,
-        'ws=',
-        wsRef.current?.readyState,
-      )
       return
     }
 
-    // Get next pending query
     const nextQuery = queryQueueRef.current.find((q) => q.status === 'pending')
     if (!nextQuery) {
-      console.log('✅ No pending queries in queue')
       return
     }
 
-    // Mark as processing
     isProcessingQueryRef.current = true
     currentQueryIdRef.current = nextQuery.id
     setCurrentQueryId(nextQuery.id)
@@ -152,15 +190,12 @@ export default function CreateListingPage() {
     )
 
     setIsProcessing(true)
-    console.log('📤 Processing query from queue:', nextQuery.text)
 
-    // Set timeout for query (30 seconds max)
     if (queryTimeoutRef.current) {
       clearTimeout(queryTimeoutRef.current)
     }
     const queryIdForTimeout = nextQuery.id
     queryTimeoutRef.current = setTimeout(() => {
-      console.warn('⏱️ Query timeout, marking as error and processing next')
       if (currentQueryIdRef.current === queryIdForTimeout) {
         setQueryQueue((prev) =>
           prev.map((q) => (q.id === queryIdForTimeout ? { ...q, status: 'error' } : q)),
@@ -171,12 +206,12 @@ export default function CreateListingPage() {
         setIsProcessing(false)
         setTimeout(() => processNextQuery(), 100)
       }
-    }, 30000) // 30 second timeout
+    }, 30000)
 
     try {
       wsRef.current.send(
         JSON.stringify({
-          type: 'property_create',
+          type: 'project_form_extract',
           text: nextQuery.text,
           clerk_id: clerkId,
           session_id: sessionIdRef.current,
@@ -184,7 +219,6 @@ export default function CreateListingPage() {
       )
     } catch (error) {
       console.error('Error sending query:', error)
-      // Mark query as error
       setQueryQueue((prev) =>
         prev.map((q) => (q.id === nextQuery.id ? { ...q, status: 'error' } : q)),
       )
@@ -192,14 +226,12 @@ export default function CreateListingPage() {
       currentQueryIdRef.current = null
       setCurrentQueryId(null)
       setIsProcessing(false)
-      // Try next query
       setTimeout(() => processNextQuery(), 100)
     }
   }, [clerkId])
 
   // Mark current query as completed and process next
   const completeCurrentQuery = useCallback(() => {
-    // Clear timeout
     if (queryTimeoutRef.current) {
       clearTimeout(queryTimeoutRef.current)
       queryTimeoutRef.current = null
@@ -216,12 +248,10 @@ export default function CreateListingPage() {
     setCurrentQueryId(null)
     setIsProcessing(false)
 
-    // Remove completed queries after a delay
     setTimeout(() => {
       setQueryQueue((prev) => prev.filter((q) => q.status !== 'completed'))
     }, 2000)
 
-    // Process next query
     setTimeout(() => processNextQuery(), 100)
   }, [processNextQuery])
 
@@ -248,12 +278,10 @@ export default function CreateListingPage() {
         wsRef.current = ws
 
         ws.onopen = () => {
-          console.log('✅ WebSocket connected for property creation')
+          console.log('✅ WebSocket connected for project creation')
           setWsConnected(true)
           setStatusMessage('Connected. You can start speaking.')
           setStatusType('success')
-          // Process any pending queries when WebSocket connects
-          // Will be handled by the useEffect that watches wsConnected
         }
 
         ws.onmessage = (event) => {
@@ -261,68 +289,41 @@ export default function CreateListingPage() {
             const data = JSON.parse(event.data)
             console.log('📨 WebSocket message:', data)
 
-            if (data.type === 'field_update') {
-              // Update only the fields that were actually changed
-              if (data.updates) {
-                const updates = data.updates as Record<string, any>
+            if (data.type === 'project_form_update') {
+              // Update form fields from AI extraction
+              if (data.data?.extracted_fields) {
+                const fields = data.data.extracted_fields
                 setFormData((prev) => {
                   const updated = { ...prev }
-                  // Only update the fields that were sent in updates
-                  Object.keys(updates).forEach((key) => {
-                    if (key in updated) {
-                      const value = updates[key]
-                      // Handle images array separately, convert others to string
-                      if (key === 'images' && Array.isArray(value)) {
-                        updated.images = value
-                      } else if (key !== 'images') {
-                        updated[key as keyof PropertyFormData] = String(value) as any
-                      }
-                    }
-                  })
+                  if (fields.title) updated.title = fields.title
+                  if (fields.description) updated.description = fields.description
+                  if (fields.project_type) updated.project_type = fields.project_type
+                  if (fields.budget_min) updated.budget_min = String(fields.budget_min)
+                  if (fields.budget_max) updated.budget_max = String(fields.budget_max)
+                  if (fields.location) updated.location = fields.location
+                  if (fields.city) updated.city = fields.city
+                  if (fields.timeline) updated.timeline = fields.timeline
+                  if (fields.requirements?.length) updated.requirements = fields.requirements
                   return updated
                 })
-                console.log('✅ Updated fields:', Object.keys(updates))
               }
 
-              // Update missing fields
-              if (data.missing_fields) {
-                setMissingFields(data.missing_fields)
+              if (data.data?.missing_fields) {
+                setMissingFields(data.data.missing_fields)
               }
 
-              // Update status message
-              if (data.message) {
-                setStatusMessage(data.message)
-                setStatusType('info')
-              }
-
-              // Complete current query and process next
+              setStatusMessage(data.message || 'Fields updated')
+              setStatusType('info')
               completeCurrentQuery()
-            } else if (data.type === 'completed') {
-              setStatusMessage(data.message || 'Property listing created successfully!')
-              setStatusType('success')
-              completeCurrentQuery()
-              setIsRecording(false)
-              setPartialTranscript('')
-              setAccumulatedTranscript('')
-              // Clear queue on completion
-              setQueryQueue([])
-              queryQueueRef.current = []
-
-              // Redirect to seller page after completion
-              setTimeout(() => {
-                router.push('/seller')
-              }, 2000)
             } else if (data.type === 'error') {
               setStatusMessage(data.message || 'An error occurred')
               setStatusType('error')
-              // Mark current query as error and process next
               const errorId = currentQueryIdRef.current
               if (errorId) {
                 setQueryQueue((prev) =>
                   prev.map((q) => (q.id === errorId ? { ...q, status: 'error' } : q)),
                 )
               }
-              // Clear timeout
               if (queryTimeoutRef.current) {
                 clearTimeout(queryTimeoutRef.current)
                 queryTimeoutRef.current = null
@@ -331,12 +332,7 @@ export default function CreateListingPage() {
               currentQueryIdRef.current = null
               setCurrentQueryId(null)
               setIsProcessing(false)
-              // Process next query after error
               setTimeout(() => processNextQuery(), 500)
-            } else if (data.type === 'agent') {
-              setStatusMessage(data.message || '')
-              setStatusType('info')
-              // Don't complete query on agent messages - they're just informational
             } else if (data.type === 'processing') {
               setIsProcessing(true)
               setStatusMessage(data.message || 'Processing...')
@@ -357,7 +353,6 @@ export default function CreateListingPage() {
         ws.onclose = () => {
           console.log('🔌 WebSocket disconnected')
           setWsConnected(false)
-          // Mark current query as error if processing
           const disconnectedId = currentQueryIdRef.current
           if (isProcessingQueryRef.current && disconnectedId) {
             setQueryQueue((prev) =>
@@ -369,7 +364,6 @@ export default function CreateListingPage() {
             setIsProcessing(false)
           }
           if (isVoiceMode && isRecording) {
-            // Attempt to reconnect after a delay
             setTimeout(() => {
               if (isVoiceMode) {
                 connectWebSocket()
@@ -389,19 +383,16 @@ export default function CreateListingPage() {
     }
 
     return () => {
-      // Only close WebSocket if voice mode is explicitly disabled
-      // Don't close just because component re-renders or form is edited
       if (!isVoiceMode && wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
       }
     }
-  }, [API_BASE_URL, clerkId, isVoiceMode, completeCurrentQuery, processNextQuery])
+  }, [API_BASE_URL, clerkId, isVoiceMode, completeCurrentQuery, processNextQuery, isRecording])
 
   // Auto-process queue when WebSocket connects or queue changes
   useEffect(() => {
     if (wsConnected && queryQueue.length > 0 && !isProcessingQueryRef.current) {
-      // Small delay to ensure WebSocket is fully ready
       const timer = setTimeout(() => {
         processNextQuery()
       }, 100)
@@ -412,19 +403,6 @@ export default function CreateListingPage() {
   // Initialize Web Speech API
   useEffect(() => {
     if (typeof window === 'undefined') return
-
-    // Suppress noisy browser console errors for known Web Speech network hiccups
-    const originalConsoleError = console.error
-    console.error = (...args: any[]) => {
-      if (
-        args.length &&
-        typeof args[0] === 'string' &&
-        args[0].includes('Speech recognition error: network')
-      ) {
-        return
-      }
-      originalConsoleError(...args)
-    }
 
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -452,31 +430,26 @@ export default function CreateListingPage() {
         }
       }
 
-      // Show partial transcript in real-time
       if (interimTranscript) {
         setPartialTranscript(interimTranscript)
       }
 
-      // Clear pause timer when new speech is detected
       if (pauseTimerRef.current) {
         clearTimeout(pauseTimerRef.current)
         pauseTimerRef.current = null
       }
 
-      // Accumulate final transcripts
       if (finalTranscript.trim()) {
         accumulatedTextRef.current += ' ' + finalTranscript.trim()
         setAccumulatedTranscript(accumulatedTextRef.current)
-        setPartialTranscript('') // Clear interim when we have final
+        setPartialTranscript('')
 
-        // Set a 2.5-second pause timer to form a new query
         if (pauseTimerRef.current) {
           clearTimeout(pauseTimerRef.current)
         }
         pauseTimerRef.current = setTimeout(() => {
           if (accumulatedTextRef.current.trim()) {
             const queryText = accumulatedTextRef.current.trim()
-            // Create a new query and add to queue
             const newQuery: QueuedQuery = {
               id: `query_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
               text: queryText,
@@ -487,217 +460,115 @@ export default function CreateListingPage() {
             setQueryQueue((prev) => {
               const updated = [...prev, newQuery]
               queryQueueRef.current = updated
-              // Try to process queue after state update
               setTimeout(() => processNextQuery(), 50)
               return updated
             })
 
-            // Clear accumulated text after adding to queue
             accumulatedTextRef.current = ''
             setAccumulatedTranscript('')
           }
-        }, 2500) // 2.5 seconds pause
+        }, 2500)
       }
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // Handle different error types appropriately
       if (event.error === 'aborted') {
-        // "aborted" is usually harmless - happens when recognition is stopped/restarted
-        // Don't show this as an error to the user, just log it
-        console.log('Speech recognition aborted (normal during restart)')
-        // Don't set isRecording to false - let the onend handler manage restart
         return
       } else if (event.error === 'no-speech') {
-        // No speech detected - this is normal, don't treat as error
-        console.log('No speech detected')
-        // Don't stop recording, let it continue listening
         return
-      } else if (event.error === 'audio-capture') {
-        console.error('Speech recognition error: audio-capture')
-        setStatusMessage('Microphone not found. Please check your settings.')
-        setStatusType('error')
-        setIsRecording(false)
-      } else if (event.error === 'network') {
-        // Network hiccup — treat as handled and avoid noisy console.error
-        try {
-          // Best-effort to prevent bubbling to the console
-          ;(event as any)?.preventDefault?.()
-          ;(event as any)?.stopPropagation?.()
-        } catch (_) {
-          // ignore
-        }
-        console.warn('Speech recognition network issue (handled). Online:', navigator.onLine)
-        setStatusMessage(
-          navigator.onLine
-            ? 'Network issue. Voice input paused—please try again.'
-            : 'You appear offline. Voice input paused until connection is restored.'
-        )
-        setStatusType('error')
-        // Stop recording cleanly to avoid restart loops while offline
-        isRecordingRef.current = false
-        setIsRecording(false)
-        setIsVoiceMode(false)
-        if (pauseTimerRef.current) {
-          clearTimeout(pauseTimerRef.current)
-          pauseTimerRef.current = null
-        }
-        try {
-          recognition.abort()
-        } catch (e) {
-          // Ignore abort errors
-        }
-        return
-      } else if (event.error === 'not-allowed') {
-        console.error('Speech recognition error: not-allowed')
-        setStatusMessage('Microphone permission denied. Please allow microphone access.')
-        setStatusType('error')
-        setIsRecording(false)
-      } else {
-        // Other errors - log but don't necessarily stop
-        console.warn('Speech recognition error:', event.error)
-        // Only stop if it's a critical error
-        if (event.error === 'service-not-allowed' || event.error === 'bad-grammar') {
-          setIsRecording(false)
-        }
       }
+      console.error('Speech recognition error:', event.error)
+      setStatusMessage(`Voice recognition error: ${event.error}`)
+      setStatusType('error')
     }
 
     recognition.onend = () => {
-      // Use ref to check recording state (synchronous, not stale closure)
-      if (!isRecordingRef.current) {
-        console.log('🛑 Recognition ended - not restarting (recording stopped)')
-        return
-      }
-
-      // Use a small delay to avoid immediate restart issues
-      setTimeout(() => {
-        // Double-check ref again (it might have changed during timeout)
-        if (isRecordingRef.current && recognitionRef.current) {
-          try {
-            recognitionRef.current.start()
-            console.log('🔄 Speech recognition restarted (onend handler)')
-          } catch (e: any) {
-            if (
-              e.code === 11 ||
-              e.name === 'InvalidStateError' ||
-              e.name === 'AbortError' ||
-              e.message?.includes('aborted')
-            ) {
-              console.log('🔄 Recognition already running or aborted (normal)')
-            } else {
-              console.warn('Failed to restart recognition:', e)
-              // Try again after a longer delay
-              setTimeout(() => {
-                if (isRecordingRef.current && recognitionRef.current) {
-                  try {
-                    recognitionRef.current.start()
-                    console.log('🔄 Speech recognition restarted (retry)')
-                  } catch (e2: any) {
-                    if (
-                      e2.code !== 11 &&
-                      e2.name !== 'InvalidStateError' &&
-                      e2.name !== 'AbortError' &&
-                      !e2.message?.includes('aborted')
-                    ) {
-                      console.error('Failed to restart recognition (retry):', e2)
-                      isRecordingRef.current = false
-                      setIsRecording(false)
-                    }
-                  }
-                }
-              }, 500)
-            }
-          }
+      if (isRecordingRef.current) {
+        try {
+          recognition.start()
+        } catch (e) {
+          console.log('Recognition restart error:', e)
         }
-      }, 150)
+      }
     }
 
     recognitionRef.current = recognition
 
     return () => {
-      // Restore console.error
-      console.error = originalConsoleError
-
-      if (pauseTimerRef.current) {
-        clearTimeout(pauseTimerRef.current)
-      }
-      // Use ref for cleanup check
-      if (!isRecordingRef.current && recognitionRef.current) {
-        try {
-          recognitionRef.current.abort()
-        } catch (e) {
-          // Ignore errors when stopping
-        }
+      if (recognitionRef.current) {
+        recognitionRef.current.abort()
       }
     }
-  }, [clerkId, isRecording])
+  }, [processNextQuery])
 
-  const startVoiceInput = () => {
+  // Start voice input
+  const startVoiceInput = useCallback(() => {
     if (!recognitionRef.current) {
-      setStatusMessage('Speech recognition not available in this browser.')
+      setStatusMessage('Voice recognition not available in this browser')
       setStatusType('error')
       return
     }
 
-    isRecordingRef.current = true
+    // Check if already recording
+    if (isRecordingRef.current) {
+      console.log('Recognition already running')
+      return
+    }
+
     setIsVoiceMode(true)
+    isRecordingRef.current = true
     setIsRecording(true)
-    setStatusMessage('Listening... Please describe your property.')
-    setStatusType('info')
+    setPartialTranscript('')
+    setAccumulatedTranscript('')
+    accumulatedTextRef.current = ''
 
     try {
-      recognitionRef.current.start()
-    } catch (e: any) {
-      // Handle common errors gracefully
-      if (
-        e.code === 11 ||
-        e.name === 'InvalidStateError' ||
-        e.name === 'AbortError' ||
-        e.message?.includes('aborted')
-      ) {
-        // Already started or aborted - this is normal, just log
-        console.log('Recognition already running or aborted (normal)')
-        // Don't show error to user, recognition is likely already working
-      } else {
-        console.error('Failed to start recognition:', e)
-        setStatusMessage('Failed to start voice input. Please try again.')
-        setStatusType('error')
-        isRecordingRef.current = false
-        setIsRecording(false)
+      // Stop any existing recognition first
+      try {
+        recognitionRef.current.abort()
+      } catch (e) {
+        // Ignore abort errors
       }
+      
+      // Small delay before starting
+      setTimeout(() => {
+        try {
+          recognitionRef.current?.start()
+          setStatusMessage('Listening... Speak to describe your project')
+          setStatusType('info')
+        } catch (e: any) {
+          console.error('Failed to start recognition:', e)
+          if (e.message?.includes('already started')) {
+            // Already running, that's fine
+            setStatusMessage('Listening... Speak to describe your project')
+            setStatusType('info')
+          } else {
+            setStatusMessage('Failed to start voice recognition')
+            setStatusType('error')
+            isRecordingRef.current = false
+            setIsRecording(false)
+          }
+        }
+      }, 100)
+    } catch (e) {
+      console.error('Failed to start recognition:', e)
+      setStatusMessage('Failed to start voice recognition')
+      setStatusType('error')
+      isRecordingRef.current = false
+      setIsRecording(false)
     }
-  }
+  }, [])
 
-  const stopVoiceInput = () => {
-    // CRITICAL: Set ref to false FIRST to prevent restart in onend handler
+  // Stop voice input
+  const stopVoiceInput = useCallback(() => {
     isRecordingRef.current = false
     setIsRecording(false)
-    setIsVoiceMode(false)
-    
-    if (pauseTimerRef.current) {
-      clearTimeout(pauseTimerRef.current)
-      pauseTimerRef.current = null
-    }
 
-    // Stop recognition BEFORE processing accumulated text
     if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort() // Use abort() instead of stop() for immediate termination
-        console.log('🛑 Speech recognition aborted')
-      } catch (e: any) {
-        // Ignore errors when stopping (might already be stopped)
-        if (
-          e.name !== 'InvalidStateError' &&
-          e.name !== 'AbortError' &&
-          !e.message?.includes('aborted')
-        ) {
-          console.warn('Error stopping recognition:', e)
-        }
-      }
+      recognitionRef.current.stop()
     }
 
-    // Add any remaining accumulated text to queue
+    // Process any remaining accumulated text
     if (accumulatedTextRef.current.trim()) {
       const queryText = accumulatedTextRef.current.trim()
       const newQuery: QueuedQuery = {
@@ -710,7 +581,6 @@ export default function CreateListingPage() {
       setQueryQueue((prev) => {
         const updated = [...prev, newQuery]
         queryQueueRef.current = updated
-        // Try to process queue after state update
         setTimeout(() => processNextQuery(), 50)
         return updated
       })
@@ -719,130 +589,11 @@ export default function CreateListingPage() {
       setAccumulatedTranscript('')
     }
 
-    setPartialTranscript('')
-    setStatusMessage('Voice input stopped.')
+    setStatusMessage('Recording stopped')
     setStatusType('info')
-  }
+  }, [processNextQuery])
 
-  const handleInputChange = (field: keyof PropertyFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files || files.length === 0) return
-
-    setUploadingImages(true)
-    setStatusMessage('Uploading images...')
-    setStatusType('info')
-
-    try {
-      if (!API_BASE_URL || !clerkId) {
-        throw new Error('API URL or Clerk ID not available')
-      }
-
-      const formData = new FormData()
-      Array.from(files).forEach((file) => {
-        formData.append('files', file)
-      })
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/storage/upload?clerk_id=${encodeURIComponent(clerkId)}`,
-        {
-          method: 'POST',
-          body: formData,
-        },
-      )
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }))
-        throw new Error(errorData.detail || 'Failed to upload images')
-      }
-
-      const result = await response.json()
-      setFormData((prev) => ({
-        ...prev,
-        images: [...prev.images, ...result.urls],
-      }))
-      setStatusMessage(`${result.count} image(s) uploaded successfully!`)
-      setStatusType('success')
-    } catch (error: any) {
-      console.error('Error uploading images:', error)
-      setStatusMessage(error.message || 'Failed to upload images')
-      setStatusType('error')
-    } finally {
-      setUploadingImages(false)
-      // Reset file input
-      e.target.value = ''
-    }
-  }
-
-  const removeImage = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-    }))
-  }
-
-  const generateDescription = async () => {
-    setIsGeneratingDescription(true)
-    setStatusMessage('Generating description...')
-    setStatusType('info')
-
-    try {
-      if (!API_BASE_URL || !clerkId) {
-        throw new Error('API URL or Clerk ID not available')
-      }
-
-      // Prepare property data for description generation
-      const propertyData = {
-        title: formData.title || 'Property',
-        description: formData.description || '',
-        price: formData.price ? parseFloat(formData.price) : null,
-        property_type: formData.property_type || '',
-        area_sqft: formData.area_sqft ? parseFloat(formData.area_sqft) : null,
-        bedrooms: formData.bedrooms ? parseInt(formData.bedrooms) : null,
-        bathrooms: formData.bathrooms ? parseInt(formData.bathrooms) : null,
-        floors: formData.floors ? parseInt(formData.floors) : null,
-        city: formData.city || '',
-        area: formData.area || '',
-      }
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/properties/generate-description?clerk_id=${encodeURIComponent(clerkId)}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(propertyData),
-        },
-      )
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ detail: 'Failed to generate description' }))
-        throw new Error(errorData.detail || 'Failed to generate description')
-      }
-
-      const result = await response.json()
-      if (result.description) {
-        setFormData((prev) => ({ ...prev, description: result.description }))
-        setStatusMessage('Description generated successfully!')
-        setStatusType('success')
-      } else {
-        throw new Error('No description generated')
-      }
-    } catch (error: any) {
-      console.error('Error generating description:', error)
-      setStatusMessage(error.message || 'Failed to generate description')
-      setStatusType('error')
-    } finally {
-      setIsGeneratingDescription(false)
-    }
-  }
-
+  // Handle audio file upload
   const handleAudioFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -871,6 +622,7 @@ export default function CreateListingPage() {
     }
 
     setUploadingAudio(true)
+    setIsVoiceMode(true) // Enable voice mode to connect WebSocket
     setStatusMessage('Uploading and transcribing audio...')
     setStatusType('info')
 
@@ -910,7 +662,6 @@ export default function CreateListingPage() {
         setQueryQueue((prev) => {
           const updated = [...prev, newQuery]
           queryQueueRef.current = updated
-          // Try to process queue after state update
           setTimeout(() => processNextQuery(), 50)
           return updated
         })
@@ -935,21 +686,84 @@ export default function CreateListingPage() {
     }
   }
 
-  const calculateProgress = () => {
-    const filled = REQUIRED_FIELDS.filter((field) => {
-      const value = formData[field]
-      return value !== '' && value !== null && value !== undefined
-    }).length
-    return Math.round((filled / REQUIRED_FIELDS.length) * 100)
+  // Generate description using AI
+  const generateDescription = async () => {
+    setIsGeneratingDescription(true)
+    setStatusMessage('Generating description...')
+    setStatusType('info')
+
+    try {
+      if (!API_BASE_URL || !clerkId) {
+        throw new Error('API URL or Clerk ID not available')
+      }
+
+      const projectData = {
+        title: formData.title || 'Project',
+        description: formData.description || '',
+        project_type: formData.project_type || '',
+        budget_min: formData.budget_min ? parseFloat(formData.budget_min) : null,
+        budget_max: formData.budget_max ? parseFloat(formData.budget_max) : null,
+        city: formData.city || '',
+        location: formData.location || '',
+        timeline: formData.timeline || '',
+        requirements: formData.requirements || [],
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/projects/generate-description?clerk_id=${encodeURIComponent(clerkId)}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(projectData),
+        },
+      )
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ detail: 'Failed to generate description' }))
+        throw new Error(errorData.detail || 'Failed to generate description')
+      }
+
+      const result = await response.json()
+      if (result.description) {
+        setFormData((prev) => ({ ...prev, description: result.description }))
+        setStatusMessage('Description generated successfully!')
+        setStatusType('success')
+      } else {
+        throw new Error('No description generated')
+      }
+    } catch (error: any) {
+      console.error('Error generating description:', error)
+      setStatusMessage(error.message || 'Failed to generate description')
+      setStatusType('error')
+    } finally {
+      setIsGeneratingDescription(false)
+    }
   }
 
-  const getMissingFieldsList = () => {
-    return REQUIRED_FIELDS.filter((field) => {
-      const value = formData[field]
-      return !value || value === ''
-    })
+  // Add requirement
+  const addRequirement = () => {
+    if (newRequirement.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        requirements: [...prev.requirements, newRequirement.trim()]
+      }))
+      setNewRequirement('')
+    }
   }
 
+  // Remove requirement
+  const removeRequirement = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      requirements: prev.requirements.filter((_, i) => i !== index)
+    }))
+  }
+
+  // Submit form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -967,139 +781,57 @@ export default function CreateListingPage() {
       wsRef.current = null
     }
     
+    const missing = getMissingFieldsList()
+    if (missing.length > 0) {
+      setStatusMessage(`Please fill in: ${missing.join(', ')}`)
+      setStatusType('error')
+      return
+    }
+    
     setIsSubmitting(true)
-    setStatusMessage('Creating property listing...')
+    setStatusMessage('Creating project...')
     setStatusType('info')
-
+    
     try {
-      if (!API_BASE_URL || !clerkId) {
-        throw new Error('API URL or Clerk ID not available')
-      }
-
-      // Validate required fields before submitting
-      const price = parseFloat(formData.price)
-      const areaSqft = parseFloat(formData.area_sqft)
-      const bedrooms = parseInt(formData.bedrooms)
-      const bathrooms = parseInt(formData.bathrooms)
-      // lat/lng are optional - only parse if provided
-      const lng = formData.lng ? parseFloat(formData.lng) : null
-      const lat = formData.lat ? parseFloat(formData.lat) : null
-
-      if (isNaN(price) || price <= 0) {
-        throw new Error('Price must be a valid positive number')
-      }
-      if (isNaN(areaSqft) || areaSqft <= 0) {
-        throw new Error('Area must be a valid positive number')
-      }
-      if (isNaN(bedrooms) || bedrooms < 0) {
-        throw new Error('Bedrooms must be a valid non-negative number')
-      }
-      if (isNaN(bathrooms) || bathrooms < 0) {
-        throw new Error('Bathrooms must be a valid non-negative number')
-      }
-      // Only validate lat/lng if they were provided
-      if (formData.lng && (lng === null || isNaN(lng))) {
-        throw new Error('Longitude must be a valid number')
-      }
-      if (formData.lat && (lat === null || isNaN(lat))) {
-        throw new Error('Latitude must be a valid number')
-      }
-
-      const payload: any = {
-        title: formData.title.trim(),
-        description: formData.description.trim(),
-        price: price,
-        property_type: formData.property_type,
-        area_sqft: areaSqft,
-        bedrooms: bedrooms,
-        bathrooms: bathrooms,
-        floors: parseInt(formData.floors) || 1,
-        city: formData.city.trim(),
-        area: formData.area.trim(),
-        images: formData.images.filter((img) => img.trim() !== ''),
+      const projectData = {
+        title: formData.title,
+        description: formData.description,
+        project_type: formData.project_type,
+        budget_min: parseFloat(formData.budget_min),
+        budget_max: parseFloat(formData.budget_max),
+        location: formData.location || formData.city,
+        city: formData.city,
+        timeline: formData.timeline || undefined,
+        requirements: formData.requirements.length > 0 ? formData.requirements : undefined,
       }
       
-      // Only include lat/lng if they have valid values
-      if (lng !== null && !isNaN(lng)) {
-        payload.lng = lng
-      }
-      if (lat !== null && !isNaN(lat)) {
-        payload.lat = lat
-      }
-
       const response = await fetch(
-        `${API_BASE_URL}/api/properties?clerk_id=${encodeURIComponent(clerkId)}`,
+        `${API_BASE_URL || 'http://localhost:8000'}/api/projects?clerk_id=${clerkId}`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        },
-      )
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to create property listing'
-        try {
-          const errorData = await response.json()
-          // Handle different error response formats
-          if (errorData.detail) {
-            // FastAPI validation errors can be a list or a string
-            if (Array.isArray(errorData.detail)) {
-              errorMessage = errorData.detail
-                .map((err: any) => {
-                  if (typeof err === 'object' && err.msg) {
-                    return `${err.loc?.join('.')}: ${err.msg}`
-                  }
-                  return String(err)
-                })
-                .join(', ')
-            } else {
-              errorMessage = String(errorData.detail)
-            }
-          } else if (errorData.message) {
-            errorMessage = String(errorData.message)
-          } else if (typeof errorData === 'string') {
-            errorMessage = errorData
-          }
-        } catch (parseError) {
-          // If JSON parsing fails, use the status text
-          errorMessage = response.statusText || 'Unknown error occurred'
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(projectData),
         }
-        throw new Error(errorMessage)
+      )
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to create project')
       }
-
-      const result = await response.json()
-      setStatusMessage('Property listing created successfully!')
+      
+      setStatusMessage('Project created successfully!')
       setStatusType('success')
-
-      // Redirect to seller page
+      
       setTimeout(() => {
-        router.push('/seller')
-      }, 1500)
-    } catch (error: any) {
-      console.error('Error creating property:', error)
-      // Extract error message properly
-      let errorMessage = 'Failed to create property listing'
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'string') {
-        errorMessage = error
-      } else if (error && typeof error === 'object') {
-        errorMessage = error.message || error.detail || JSON.stringify(error)
-      }
-      setStatusMessage(errorMessage)
+        router.push('/buyer/projects')
+      }, 2000)
+    } catch (err: any) {
+      setStatusMessage(err.message || 'Failed to create project')
       setStatusType('error')
     } finally {
       setIsSubmitting(false)
     }
   }
-
-  useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/sign-in')
-    }
-  }, [loading, isAuthenticated, router])
 
   if (loading) {
     return (
@@ -1122,13 +854,19 @@ export default function CreateListingPage() {
   return (
     <div className="min-h-screen bg-[linear-gradient(to_bottom,rgba(249,249,249,0.85),rgba(237,236,232,0.9))] text-[color:var(--color-primary)]">
       <div className="max-w-4xl mx-auto px-6 py-12">
+        {/* Back Link */}
+        <Link href="/buyer" className="inline-flex items-center text-slate-600 hover:text-slate-900 mb-6">
+          <ArrowLeftIcon className="h-4 w-4 mr-2" />
+          Back to Dashboard
+        </Link>
+
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4 text-[color:var(--color-primary)]">
-            Create Property Listing
+            Create New Project
           </h1>
           <p className="text-slate-700">
-            Fill out the form manually or use voice input to describe your property. Fields will be
+            Fill out the form manually or use voice input to describe your project. Fields will be
             filled in real-time.
           </p>
         </div>
@@ -1349,6 +1087,20 @@ export default function CreateListingPage() {
               </div>
             </div>
           )}
+
+          {/* Voice Input Tip */}
+          <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
+            <div className="flex items-start gap-3">
+              <SparklesIcon className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-blue-800 mb-1">Voice Input Tips</p>
+                <p className="text-xs text-blue-700">
+                  💡 Try: "I need a kitchen renovation in DHA Lahore, budget around 5 to 8 lakh, 
+                  should be completed in 2 months. I need modern cabinets and new tiles."
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Form */}
@@ -1362,242 +1114,181 @@ export default function CreateListingPage() {
                 value={formData.title}
                 onChange={(e) => handleInputChange('title', e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="e.g., Beautiful 3-Bedroom House in F-10"
+                placeholder="e.g., Kitchen Renovation in DHA Phase 5"
                 required
               />
             </div>
 
             {/* Description */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-semibold mb-2 text-slate-700">
-                Description *
-              </label>
-              <div className="relative">
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 pr-24 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                  placeholder="Describe your property..."
-                  required
-                />
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-semibold text-slate-700">
+                  Description *
+                </label>
                 <button
                   type="button"
                   onClick={generateDescription}
-                  disabled={isGeneratingDescription}
-                  className="absolute bottom-2 left-2 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1"
+                  disabled={isGeneratingDescription || (!formData.project_type && !formData.title)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 text-white hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {isGeneratingDescription ? (
                     <>
-                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-                      Generating...
+                      <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Generating...</span>
                     </>
                   ) : (
                     <>
-                      <SparklesIcon className="h-3 w-3" />
-                      Generate
+                      <SparklesIcon className="h-3.5 w-3.5" />
+                      <span>Generate with AI</span>
                     </>
                   )}
                 </button>
               </div>
-            </div>
-
-            {/* Price */}
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-700">
-                Price (PKR) *
-              </label>
-              <input
-                type="number"
-                value={formData.price}
-                onChange={(e) => handleInputChange('price', e.target.value)}
+              <textarea
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                rows={4}
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="15000000"
+                placeholder="Describe what you need done in detail, or click 'Generate with AI' to auto-generate..."
                 required
-                min="0"
-                step="0.01"
               />
             </div>
 
-            {/* Property Type */}
+            {/* Project Type */}
             <div>
               <label className="block text-sm font-semibold mb-2 text-slate-700">
-                Property Type *
+                Project Type *
               </label>
               <select
-                value={formData.property_type}
-                onChange={(e) => handleInputChange('property_type', e.target.value)}
+                value={formData.project_type}
+                onChange={(e) => handleInputChange('project_type', e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
                 required
               >
                 <option value="">Select type</option>
-                <option value="house">House</option>
-                <option value="apartment">Apartment</option>
-                <option value="plot">Plot</option>
-                <option value="commercial">Commercial</option>
-                <option value="villa">Villa</option>
-                <option value="flat">Flat</option>
+                {PROJECT_TYPES.map(type => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
               </select>
-            </div>
-
-            {/* Area (sqft) */}
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-700">
-                Area (sqft) *
-              </label>
-              <input
-                type="number"
-                value={formData.area_sqft}
-                onChange={(e) => handleInputChange('area_sqft', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="2500"
-                required
-                min="0"
-                step="0.01"
-              />
-            </div>
-
-            {/* Bedrooms */}
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-700">Bedrooms *</label>
-              <input
-                type="number"
-                value={formData.bedrooms}
-                onChange={(e) => handleInputChange('bedrooms', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="3"
-                required
-                min="0"
-              />
-            </div>
-
-            {/* Bathrooms */}
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-700">Bathrooms *</label>
-              <input
-                type="number"
-                value={formData.bathrooms}
-                onChange={(e) => handleInputChange('bathrooms', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="2"
-                required
-                min="0"
-              />
-            </div>
-
-            {/* Floors */}
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-700">Floors</label>
-              <input
-                type="number"
-                value={formData.floors}
-                onChange={(e) => handleInputChange('floors', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="1"
-                min="1"
-              />
             </div>
 
             {/* City */}
             <div>
               <label className="block text-sm font-semibold mb-2 text-slate-700">City *</label>
-              <input
-                type="text"
+              <select
                 value={formData.city}
                 onChange={(e) => handleInputChange('city', e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="Islamabad"
                 required
-              />
+              >
+                <option value="">Select city</option>
+                {CITIES.map(city => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
             </div>
 
-            {/* Area/Sector */}
-            <div>
+            {/* Location */}
+            <div className="md:col-span-2">
               <label className="block text-sm font-semibold mb-2 text-slate-700">
-                Area/Sector *
+                Location/Address
               </label>
               <input
                 type="text"
-                value={formData.area}
-                onChange={(e) => handleInputChange('area', e.target.value)}
+                value={formData.location}
+                onChange={(e) => handleInputChange('location', e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="F-10/3"
+                placeholder="e.g., DHA Phase 5, Block J, Street 12"
+              />
+            </div>
+
+            {/* Budget Min */}
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-slate-700">
+                Minimum Budget (PKR) *
+              </label>
+              <input
+                type="number"
+                value={formData.budget_min}
+                onChange={(e) => handleInputChange('budget_min', e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
+                placeholder="500000"
                 required
+                min="0"
               />
             </div>
 
-            {/* Longitude */}
+            {/* Budget Max */}
             <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-700">Longitude (Optional)</label>
+              <label className="block text-sm font-semibold mb-2 text-slate-700">
+                Maximum Budget (PKR) *
+              </label>
               <input
                 type="number"
-                value={formData.lng}
-                onChange={(e) => handleInputChange('lng', e.target.value)}
+                value={formData.budget_max}
+                onChange={(e) => handleInputChange('budget_max', e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="73.0479"
-                step="0.0001"
+                placeholder="800000"
+                required
+                min="0"
               />
             </div>
 
-            {/* Latitude */}
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-700">Latitude (Optional)</label>
+            {/* Timeline */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold mb-2 text-slate-700">
+                Expected Timeline
+              </label>
               <input
-                type="number"
-                value={formData.lat}
-                onChange={(e) => handleInputChange('lat', e.target.value)}
+                type="text"
+                value={formData.timeline}
+                onChange={(e) => handleInputChange('timeline', e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
-                placeholder="33.6844"
-                step="0.0001"
+                placeholder="e.g., 2-3 months"
               />
             </div>
-          </div>
 
-          {/* Image Upload Section */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-semibold mb-2 text-slate-700">
-              Property Images
-            </label>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer transition-all">
-                  <PhotoIcon className="h-5 w-5" />
-                  {uploadingImages ? 'Uploading...' : 'Upload Images'}
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    disabled={uploadingImages}
-                  />
-                </label>
-                {uploadingImages && (
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[color:var(--color-primary)]"></div>
-                    <span className="text-sm text-slate-600">Uploading...</span>
-                  </div>
-                )}
+            {/* Requirements */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold mb-2 text-slate-700">
+                Specific Requirements
+              </label>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newRequirement}
+                  onChange={(e) => setNewRequirement(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRequirement())}
+                  className="flex-1 px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-[color:var(--color-primary)] focus:border-transparent"
+                  placeholder="Add a requirement..."
+                />
+                <button
+                  type="button"
+                  onClick={addRequirement}
+                  className="px-4 py-3 rounded-xl border border-slate-300 hover:bg-slate-50 transition-colors"
+                >
+                  <PlusIcon className="h-5 w-5 text-slate-600" />
+                </button>
               </div>
-
-              {/* Image Preview Grid */}
-              {formData.images.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {formData.images.map((url, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={url}
-                        alt={`Property ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-xl border border-slate-200"
-                      />
+              {formData.requirements.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.requirements.map((req, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full text-sm text-slate-700"
+                    >
+                      {req}
                       <button
                         type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => removeRequirement(index)}
+                        className="hover:text-red-500 transition-colors"
                       >
                         <XMarkIcon className="h-4 w-4" />
                       </button>
-                    </div>
+                    </span>
                   ))}
                 </div>
               )}
@@ -1605,20 +1296,13 @@ export default function CreateListingPage() {
           </div>
 
           {/* Submit Button */}
-          <div className="flex gap-4 pt-6">
+          <div className="pt-6">
             <button
               type="submit"
-              disabled={isSubmitting || missing.length > 0}
-              className="flex-1 px-8 py-4 rounded-xl font-semibold text-white bg-[linear-gradient(to_right,#f59e0b,var(--color-accent-gold))] hover:scale-105 active:scale-95 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              disabled={isSubmitting}
+              className="w-full px-6 py-4 rounded-xl font-bold text-white bg-[linear-gradient(to_right,var(--color-primary),var(--color-accent-gold))] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
             >
-              {isSubmitting ? 'Creating...' : 'Create Listing'}
-            </button>
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="px-6 py-4 rounded-xl font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition-all"
-            >
-              Cancel
+              {isSubmitting ? 'Creating...' : 'Create Project'}
             </button>
           </div>
         </form>

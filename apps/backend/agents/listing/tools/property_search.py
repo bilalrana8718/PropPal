@@ -357,6 +357,9 @@ async def _filter_then_search_async(query: str, k: int = 10, filters: Optional[D
             "results": results,
             "count": len(results),
             "filters_applied": filters if filters else {},
+            "filter_matched_count": filter_count,
+            "count": len(results),
+            "filters_applied": filters if filters else {},
             "filter_matched_count": filter_count
         }
         
@@ -373,7 +376,6 @@ async def _filter_then_search_async(query: str, k: int = 10, filters: Optional[D
             "filter_matched_count": 0
         }
     finally:
-        # Always close the database client
         if client:
             client.close()
 

@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { UserButton } from '@clerk/nextjs'
 import { usePathname } from 'next/navigation'
-import { useMemo } from 'react'
-import { HomeIcon } from '@heroicons/react/24/outline'
+import { useMemo, useEffect, useState } from 'react'
+import { HomeIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
+
 const segments = [
   { href: '/', label: 'Home' },
   { href: '/chat', label: 'Chat' },
@@ -14,17 +15,51 @@ const segments = [
   { href: '/builder', label: 'Builder' },
 ]
 
+// Key for storing the last active section
+const LAST_SECTION_KEY = 'proppal_last_section'
+
 export default function Topbar() {
   const pathname = usePathname()
+  const [lastSection, setLastSection] = useState<string>('/')
+  
+  // Check if we're on the messages page
+  const isMessagesPage = pathname === '/messages' || pathname.startsWith('/messages/')
+  
+  // Load last section from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(LAST_SECTION_KEY)
+      if (stored) {
+        setLastSection(stored)
+      }
+    }
+  }, [])
+  
+  // Save current section to localStorage (but not if on messages page)
+  useEffect(() => {
+    if (!isMessagesPage && typeof window !== 'undefined') {
+      const currentSection = segments.find(s => pathname === s.href || pathname.startsWith(s.href + '/'))
+      if (currentSection) {
+        localStorage.setItem(LAST_SECTION_KEY, currentSection.href)
+        setLastSection(currentSection.href)
+      }
+    }
+  }, [pathname, isMessagesPage])
 
   const activeIndex = useMemo(() => {
     // Special case: property detail pages should show "Buyer" as active
     if (pathname.startsWith('/properties/')) {
       return segments.findIndex(r => r.href === '/buyer')
     }
+    // If on messages page, use the last known section
+    if (isMessagesPage) {
+      const i = segments.findIndex(r => r.href === lastSection)
+      return i >= 0 ? i : 0
+    }
     const i = segments.findIndex(r => pathname === r.href || pathname.startsWith(r.href + '/'))
     return i >= 0 ? i : 0
-  }, [pathname])
+  }, [pathname, isMessagesPage, lastSection])
+  
   const segWidth = 100 / segments.length
 
   return (
@@ -53,6 +88,14 @@ export default function Topbar() {
 
         {/* Right Controls */}
         <div className="hidden md:flex items-center gap-5">
+          {/* Messages Icon - visible on messages page */}
+          {isMessagesPage && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200">
+              <ChatBubbleLeftRightIcon className="h-4 w-4 text-emerald-600" />
+              <span className="text-sm font-medium text-emerald-700">Messages</span>
+            </div>
+          )}
+          
           {/* Segmented Control */}
           <div
             className="relative h-10 rounded-2xl border border-white/30 bg-white/30 backdrop-blur-lg overflow-hidden shadow-inner"

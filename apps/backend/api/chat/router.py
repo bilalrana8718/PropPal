@@ -259,13 +259,14 @@ async def unified_chat_websocket(
                 })
                 continue
             
-            # Extract message details
-            message_text = data.get("text", "").strip()
+            # Extract message details - check both 'text' and 'message' fields for compatibility
+            message_text = data.get("text", "").strip() or data.get("message", "").strip()
             msg_clerk_id = data.get("clerk_id") or clerk_id
             msg_session_id = data.get("session_id") or session_id
             
             print("=" * 80)
             print(f"MESSAGE RECEIVED: '{message_text}'")
+            print(f"Raw data received: {data}")
             print(f"clerk_id: {msg_clerk_id}, session_id: {msg_session_id}")
             print("=" * 80)
             
@@ -556,6 +557,83 @@ async def unified_chat_websocket(
                     await websocket.send_json({
                         "type": "error",
                         "message": f"An error occurred during service form extraction: {str(e)}",
+                        "success": False
+                    })
+                    continue
+            
+            # Check if this is a project form extraction request (for form filling)
+            if message_type == "project_form_extract":
+                try:
+                    if not msg_clerk_id:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "clerk_id is required for project form extraction.",
+                            "success": False
+                        })
+                        continue
+                    
+                    # Import the project form extraction agent
+                    from agents.projects.project_form_extraction_agent import handle_project_form_extract
+                    
+                    # Define send function for the agent
+                    async def send_project_form(payload: Dict[str, Any]):
+                        logger.info(f"[WebSocket] Project form extraction - Sending to client: {payload}")
+                        await websocket.send_json(payload)
+                    
+                    # Run the extraction agent (single-pass)
+                    await handle_project_form_extract(
+                        send_update=send_project_form,
+                        user_id=msg_clerk_id,
+                        message=message_text
+                    )
+                    logger.info("[WebSocket] Project form extraction completed")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error in project form extraction: {e}", exc_info=True)
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"An error occurred during project form extraction: {str(e)}",
+                        "success": False
+                    })
+                    continue
+            
+            # Check if this is a bid form extraction request (for form filling)
+            if message_type == "bid_form_extract":
+                print("=" * 80)
+                print("[BID_FORM_EXTRACT] Handler triggered!")
+                print(f"[BID_FORM_EXTRACT] message_text: '{message_text}'")
+                print(f"[BID_FORM_EXTRACT] msg_clerk_id: {msg_clerk_id}")
+                print("=" * 80)
+                try:
+                    if not msg_clerk_id:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "clerk_id is required for bid form extraction.",
+                            "success": False
+                        })
+                        continue
+                    
+                    # Import the bid form extraction agent
+                    from agents.projects.bid_form_extraction_agent import handle_bid_form_extract
+                    
+                    # Define send function for the agent
+                    async def send_bid_form(payload: Dict[str, Any]):
+                        logger.info(f"[WebSocket] Bid form extraction - Sending to client: {payload}")
+                        await websocket.send_json(payload)
+                    
+                    # Run the extraction agent (single-pass)
+                    await handle_bid_form_extract(
+                        send_update=send_bid_form,
+                        builder_id=msg_clerk_id,
+                        message=message_text
+                    )
+                    logger.info("[WebSocket] Bid form extraction completed")
+                    continue
+                except Exception as e:
+                    logger.error(f"Error in bid form extraction: {e}", exc_info=True)
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"An error occurred during bid form extraction: {str(e)}",
                         "success": False
                     })
                     continue

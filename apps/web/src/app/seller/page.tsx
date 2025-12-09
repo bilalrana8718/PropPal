@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { UserButton } from '@clerk/nextjs'
 import Link from 'next/link'
-import { HomeIcon, UserIcon, PlusCircleIcon, MicrophoneIcon, SparklesIcon, EyeIcon, EllipsisVerticalIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { HomeIcon, UserIcon, PlusCircleIcon, MicrophoneIcon, SparklesIcon, EyeIcon, ChatBubbleLeftRightIcon, EllipsisVerticalIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
 import RoleDropdown from '@/components/RoleDropdown'
 
@@ -313,6 +313,15 @@ export default function SellerPage() {
             >
               <PlusCircleIcon className="h-6 w-6" />
               Create New Listing
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => router.push('/messages')}
+              className="flex items-center gap-3 px-8 py-4 rounded-xl font-semibold text-[color:var(--color-primary)] bg-white border border-slate-200 hover:shadow-xl transition-all shadow-md"
+            >
+              <ChatBubbleLeftRightIcon className="h-6 w-6" />
+              Messages
             </motion.button>
           </div>
 

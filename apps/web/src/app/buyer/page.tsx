@@ -12,6 +12,9 @@ import {
   HomeIcon,
   FunnelIcon,
   SparklesIcon,
+  ClipboardDocumentListIcon,
+  PlusIcon,
+  ChatBubbleLeftRightIcon,
   HomeModernIcon,
   BanknotesIcon,
 } from '@heroicons/react/24/outline'
@@ -209,7 +212,29 @@ export default function BuyerPage() {
             <SparklesIcon className="h-5 w-5 mr-1" />
             AI Search
           </Button>
-          </form>
+        </form>
+
+        {/* Quick Actions */}
+        <div className="flex justify-center gap-4 mt-8">
+          <Link href="/buyer/projects">
+            <Button variant="outline" className="flex items-center gap-2 rounded-xl">
+              <ClipboardDocumentListIcon className="h-5 w-5" />
+              My Projects
+            </Button>
+          </Link>
+          <Link href="/buyer/projects/create">
+            <Button variant="outline" className="flex items-center gap-2 rounded-xl bg-[color:var(--color-primary)]/10 border-[color:var(--color-primary)]/30 text-[color:var(--color-primary)] hover:bg-[color:var(--color-primary)]/20">
+              <PlusIcon className="h-5 w-5" />
+              Post a Project
+            </Button>
+          </Link>
+          <Link href="/messages">
+            <Button variant="outline" className="flex items-center gap-2 rounded-xl">
+              <ChatBubbleLeftRightIcon className="h-5 w-5" />
+              Messages
+            </Button>
+          </Link>
+        </div>
       </section>
 
       {/* Main Content */}

@@ -148,6 +148,7 @@ def _builder_profile_search_impl(query: str, filters: Optional[Dict[str, Any]] =
     Internal implementation of builder profile search.
     """
     project_fields = {
+        "user_id": 1,  # IMPORTANT: Include user_id for DM/conversation functionality
         "company_name": 1,
         "specialization": 1,
         "experience_years": 1,
@@ -158,6 +159,7 @@ def _builder_profile_search_impl(query: str, filters: Optional[Dict[str, Any]] =
         "contact_person": 1,
         "contact_email": 1,
         "contact_phone": 1,
+        "portfolio_images": 1,
     }
     search_coro = _search_async(
         query,

@@ -7,8 +7,19 @@ from .properties import Property, PropertyCreate, PropertyResponse
 from .property_amenities import PropertyAmenity, PropertyAmenityCreate, PropertyAmenityResponse
 from .builder_profiles import BuilderProfile, BuilderProfileCreate, BuilderProfileResponse
 from .builder_services import BuilderService, BuilderServiceCreate, BuilderServiceResponse
-from .user_projects import UserProject, UserProjectCreate, UserProjectResponse
-from .builder_bids import BuilderBid, BuilderBidCreate, BuilderBidResponse
+from .user_projects import (
+    UserProject, UserProjectCreate, UserProjectUpdate, 
+    UserProjectResponse, UserProjectWithUser
+)
+from .builder_bids import (
+    BuilderBid, BuilderBidCreate, BuilderBidUpdate,
+    BuilderBidResponse, BuilderBidWithBuilder, BuilderBidWithProject
+)
+from .conversations import (
+    Conversation, ConversationCreate, ConversationResponse,
+    ConversationWithDetails, ConversationListItem,
+    Message, MessageCreate, MessageResponse
+)
 from .visits import Visit, VisitCreate, VisitResponse
 from .projects import Project, ProjectCreate, ProjectResponse
 from .query_logs import QueryLog, QueryLogCreate, QueryLogResponse
@@ -39,11 +50,25 @@ __all__ = [
     # User Projects
     "UserProject",
     "UserProjectCreate",
+    "UserProjectUpdate",
     "UserProjectResponse",
+    "UserProjectWithUser",
     # Builder Bids
     "BuilderBid",
     "BuilderBidCreate",
+    "BuilderBidUpdate",
     "BuilderBidResponse",
+    "BuilderBidWithBuilder",
+    "BuilderBidWithProject",
+    # Conversations
+    "Conversation",
+    "ConversationCreate",
+    "ConversationResponse",
+    "ConversationWithDetails",
+    "ConversationListItem",
+    "Message",
+    "MessageCreate",
+    "MessageResponse",
     # Visits
     "Visit",
     "VisitCreate",

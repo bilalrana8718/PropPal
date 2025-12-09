@@ -28,6 +28,9 @@ from api.search.router import router as search_router  # noqa: E402
 from api.chat.router import router as chat_router  # noqa: E402
 from api.builder.router import router as builder_router
 from api.properties.router import router as properties_router
+from api.projects.router import router as projects_router  # noqa: E402
+from api.bids.router import router as bids_router  # noqa: E402
+from api.conversations.router import router as conversations_router  # noqa: E402
 from api.recommendations.router import router as recommendations_router
 
 
@@ -95,6 +98,9 @@ app.include_router(search_router)
 app.include_router(chat_router)
 app.include_router(builder_router)
 app.include_router(properties_router)
+app.include_router(projects_router)
+app.include_router(bids_router)
+app.include_router(conversations_router)
 app.include_router(recommendations_router)
 
 # Import and include storage router
