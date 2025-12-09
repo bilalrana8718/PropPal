@@ -429,12 +429,14 @@ async def search_builders(
             "$project": {
                 "score": {"$meta": "vectorSearchScore"},
                 "_id": 1,
+                "user_id": 1,  # IMPORTANT: Include user_id for DM functionality
                 "company_name": 1,
                 "specialization": 1,
                 "experience_years": 1,
                 "rating": 1,
                 "location": 1,
-                "about": 1
+                "about": 1,
+                "portfolio_images": 1
             }
         },
     ]
@@ -444,6 +446,9 @@ async def search_builders(
     for r in results:
         if "_id" in r:
             r["_id"] = str(r["_id"])
+        # Convert user_id to string for frontend
+        if "user_id" in r and r["user_id"]:
+            r["user_id"] = str(r["user_id"]) if isinstance(r["user_id"], ObjectId) else r["user_id"]
     return {"count": len(results), "results": results}
 
 

@@ -261,6 +261,12 @@ async def _search_async(query: str, collection_name: str, index_name: str, proje
         for r in results:
             if "_id" in r:
                 r["_id"] = str(r["_id"])
+            # Convert user_id to string for builder profiles (needed for DM/conversation)
+            if "user_id" in r and r["user_id"] is not None:
+                try:
+                    r["user_id"] = str(r["user_id"])
+                except Exception:
+                    pass
             # Some service docs include a foreign key builder_id as ObjectId
             if "builder_id" in r and r["builder_id"] is not None:
                 try:
@@ -318,6 +324,7 @@ def _builder_profile_search_impl(query: str, filters: Optional[Dict[str, Any]] =
     Internal implementation of builder profile search.
     """
     project_fields = {
+        "user_id": 1,  # IMPORTANT: Include user_id for DM/conversation functionality
         "company_name": 1,
         "specialization": 1,
         "experience_years": 1,
@@ -328,6 +335,7 @@ def _builder_profile_search_impl(query: str, filters: Optional[Dict[str, Any]] =
         "contact_person": 1,
         "contact_email": 1,
         "contact_phone": 1,
+        "portfolio_images": 1,
     }
     search_coro = _search_async(
         query,

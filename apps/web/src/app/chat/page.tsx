@@ -42,6 +42,7 @@ interface Property {
 
 interface Builder {
   _id: string
+  user_id?: string  // IMPORTANT: The user's ObjectId for DM/conversation functionality
   company_name: string
   specialization: string[]
   experience_years: number

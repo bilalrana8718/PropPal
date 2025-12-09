@@ -11,9 +11,12 @@ import {
   PlusIcon,
   ChatBubbleLeftRightIcon,
   StarIcon,
+  BriefcaseIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
+import Link from 'next/link'
 
 interface BuilderProfile {
   _id: string
@@ -159,6 +162,28 @@ export default function BuilderPage() {
             <p className="text-sm text-slate-500 mt-3">
               💡 Try: "Update my profile", "Add new service", "View my ratings"
             </p>
+
+            {/* Quick Actions */}
+            <div className="flex flex-wrap gap-3 mt-6 pt-6 border-t border-slate-200">
+              <Link href="/builder/projects">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <BriefcaseIcon className="h-5 w-5" />
+                  Find Projects
+                </Button>
+              </Link>
+              <Link href="/builder/bids">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <DocumentTextIcon className="h-5 w-5" />
+                  My Bids
+                </Button>
+              </Link>
+              <Link href="/messages">
+                <Button variant="outline" className="flex items-center gap-2">
+                  <ChatBubbleLeftRightIcon className="h-5 w-5" />
+                  Messages
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Profile Section */}

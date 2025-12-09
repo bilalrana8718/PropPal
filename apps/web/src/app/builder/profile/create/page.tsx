@@ -715,6 +715,21 @@ export default function CreateBuilderProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Clean up voice recording and WebSocket before submitting
+    if (isRecording || isVoiceMode) {
+      isRecordingRef.current = false
+      setIsRecording(false)
+      setIsVoiceMode(false)
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop() } catch {}
+      }
+    }
+    if (wsRef.current) {
+      try { wsRef.current.close() } catch {}
+      wsRef.current = null
+    }
+    
     setIsSubmitting(true)
     setStatusMessage('Creating builder profile...')
     setStatusType('info')
