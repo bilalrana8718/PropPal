@@ -97,12 +97,52 @@ def _parse_natural_language_date(text: str, base_date: Optional[datetime] = None
     Parse natural language date/time expressions and convert to ISO format.
     Handles: "Saturday afternoon", "January 20th at 2pm", "next week", "tomorrow", etc.
     Also handles multiple expressions separated by 'or', 'and', ','.
+    Supports "before 5pm", "after 2pm", "between 2pm and 5pm".
     Returns list of ISO datetime strings.
     """
     if base_date is None:
         base_date = datetime.now()
     
     text_lower = text.lower().strip()
+    
+    # Handle "all day" expressions by generating common time slots
+    if "all day" in text_lower:
+        # Extract the day reference
+        day_date = None
+        if "tomorrow" in text_lower:
+            day_date = base_date + timedelta(days=1)
+        else:
+            # Check for day names
+            days = {
+                "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+                "friday": 4, "saturday": 5, "sunday": 6
+            }
+            for day_name, day_num in days.items():
+                if day_name in text_lower:
+                    days_ahead = (day_num - base_date.weekday()) % 7
+                    if days_ahead == 0:
+                        days_ahead = 7
+                    day_date = base_date + timedelta(days=days_ahead)
+                    break
+        
+        if day_date:
+            # Generate slots throughout the day covering all common business hours
+            # Matches most seller availability patterns
+            common_hours = [
+                (9, 0),    # 9:00 AM
+                (10, 30),  # 10:30 AM
+                (11, 0),   # 11:00 AM - common meeting time
+                (12, 0),   # 12:00 PM (noon)
+                (14, 0),   # 2:00 PM - very common seller time
+                (15, 0),   # 3:00 PM
+                (16, 30),  # 4:30 PM
+                (18, 0),   # 6:00 PM
+            ]
+            results = []
+            for hour, minute in common_hours:
+                dt = datetime(day_date.year, day_date.month, day_date.day, hour, minute)
+                results.append(dt.isoformat() + "+05:00")
+            return results
     
     # Split by common separators to handle multiple time expressions
     separators = [' or ', ' and ', ', ']
@@ -120,6 +160,7 @@ def _parse_natural_language_date(text: str, base_date: Optional[datetime] = None
         all_results.extend(_parse_single_expression(segment, base_date))
     
     return all_results
+
 
 
 def _parse_single_expression(text: str, base_date: datetime) -> List[str]:
@@ -142,9 +183,50 @@ def _parse_single_expression(text: str, base_date: datetime) -> List[str]:
         "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6
     }
     
+    # Handle "after X" or "before X" expressions
+    # e.g., "after 3pm tomorrow", "before 5pm"
+    if "after" in text_lower or "before" in text_lower:
+        # Extract time
+        time_match = re.search(r'(after|before)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', text_lower)
+        if time_match:
+            is_after = time_match.group(1) == "after"
+            hour = int(time_match.group(2))
+            minute = int(time_match.group(3)) if time_match.group(3) else 0
+            am_pm = time_match.group(4)
+            
+            if am_pm == "pm" and hour < 12:
+                hour += 12
+            elif am_pm == "am" and hour == 12:
+                hour = 0
+            
+            # Determine which day
+            target_date = base_date
+            if "tomorrow" in text_lower:
+                target_date = base_date + timedelta(days=1)
+            else:
+                for day_name, day_num in days.items():
+                    if day_name in text_lower:
+                        days_ahead = (day_num - base_date.weekday()) % 7
+                        if days_ahead == 0:
+                            days_ahead = 7
+                        target_date = base_date + timedelta(days=days_ahead)
+                        break
+            
+            # Generate time slots
+            if is_after:
+                # Generate slots after the time: e.g., "after 3pm" → 4pm, 5pm, 6pm
+                for h in range(hour + 1, 19):  # Up to 6pm
+                    dt = datetime(target_date.year, target_date.month, target_date.day, h, 0)
+                    results.append(dt.isoformat() + "+05:00")
+            else:
+                # Generate slots before the time: e.g., "before 5pm" → 9am, 11am, 2pm, 3pm, 4pm
+                for h in range(9, hour):
+                    dt = datetime(target_date.year, target_date.month, target_date.day, h, 0)
+                    results.append(dt.isoformat() + "+05:00")
+            
+            if results:
+                return results
     
-    # Try to extract specific date/time
-    # Pattern: "January 20th at 2pm" or "Jan 20 at 14:00"
     date_time_pattern = r"(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s+at\s+)?(\d{1,2})?(?::(\d{2}))?\s*(am|pm)?"
     match = re.search(date_time_pattern, text_lower)
     
@@ -215,26 +297,53 @@ def _parse_single_expression(text: str, base_date: datetime) -> List[str]:
                     results.append(dt.isoformat() + "+05:00")
             break
     
+    # --- Helpers to extract explicit time from text ---
+    def _extract_clock_time(text_in: str) -> Optional[Tuple[int, int]]:
+        """
+        Extract numeric time like '3pm', '14:30', '3:15 pm', or 'at 3pm'.
+        Returns (hour_24, minute) or None.
+        """
+        time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', text_in)
+        if not time_match:
+            return None
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2)) if time_match.group(2) else 0
+        am_pm = time_match.group(3)
+        if am_pm == "pm" and hour < 12:
+            hour += 12
+        elif am_pm == "am" and hour == 12:
+            hour = 0
+        return hour, minute
+
     # Try relative dates: "tomorrow", "next week"
     if "tomorrow" in text_lower:
         tomorrow = base_date + timedelta(days=1)
-        hour = 14
-        minute = 0
-        for time_word, (h, m) in time_patterns.items():
-            if time_word in text_lower:
-                hour, minute = h, m
-                break
+        # Prefer explicit time if present; otherwise fall back to time words; else 14:00
+        extracted = _extract_clock_time(text_lower)
+        if extracted:
+            hour, minute = extracted
+        else:
+            hour = 14
+            minute = 0
+            for time_word, (h, m) in time_patterns.items():
+                if time_word in text_lower:
+                    hour, minute = h, m
+                    break
         dt = datetime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute)
         results.append(dt.isoformat() + "+05:00")
     
     if "next week" in text_lower:
         next_week = base_date + timedelta(days=7)
-        hour = 14
-        minute = 0
-        for time_word, (h, m) in time_patterns.items():
-            if time_word in text_lower:
-                hour, minute = h, m
-                break
+        extracted = _extract_clock_time(text_lower)
+        if extracted:
+            hour, minute = extracted
+        else:
+            hour = 14
+            minute = 0
+            for time_word, (h, m) in time_patterns.items():
+                if time_word in text_lower:
+                    hour, minute = h, m
+                    break
         dt = datetime(next_week.year, next_week.month, next_week.day, hour, minute)
         results.append(dt.isoformat() + "+05:00")
     

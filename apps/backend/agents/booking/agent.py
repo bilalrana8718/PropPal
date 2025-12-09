@@ -247,13 +247,19 @@ Example: User says "I'm available Saturday 2PM for property 123"
             err_msg = ToolMessage(content=f"Tool execution failed: {e}", tool_call_id="booking_error")
             return {"messages": [err_msg], "error": str(e), "success": False}
 
-    def process_query(self, query: str, buyer_id: Optional[str] = None) -> Dict[str, Any]:
+    def process_query(
+        self,
+        query: str,
+        buyer_id: Optional[str] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None
+    ) -> Dict[str, Any]:
         """
         Public API for booking agent.
         
         Args:
             query: The user's booking query
             buyer_id: Internal MongoDB user ID (optional, required for confirmations)
+            conversation_history: Recent conversation messages for context
         """
         if not query or not query.strip():
             return {
@@ -273,12 +279,182 @@ Example: User says "I'm available Saturday 2PM for property 123"
         )
 
         try:
+            # EARLY CONFIRMATION CHECK: If user is confirming with conversation history
+            confirmation_keywords = ["yes", "ok", "confirm", "sure", "book it", "schedule it", 
+                                    "go ahead", "sounds good", "perfect", "great", "book this", "book"]
+            query_lower = query.strip().lower()
+            is_confirmation = any(keyword in query_lower for keyword in confirmation_keywords)
+            
+            logger.info(f"[BOOKING CONFIRMATION DEBUG] query_lower='{query_lower}', is_confirmation={is_confirmation}, has_conversation_history={bool(conversation_history)}, has_buyer_id={bool(buyer_id)}")
+            
+            # Extract overlap from conversation history BEFORE running agent workflow
+            extracted_data = None
+            if is_confirmation and conversation_history and buyer_id:
+                logger.info(f"[BOOKING CONFIRMATION DEBUG] Searching conversation history for overlap data, history length={len(conversation_history)}")
+                try:
+                    for i, msg in enumerate(reversed(conversation_history)):
+                        if msg.get("role") == "assistant":
+                            payload = msg.get("_payload", {})
+                            booking_data = payload.get("booking")
+                            logger.info(f"[BOOKING CONFIRMATION DEBUG] Message {i}: has_payload={bool(payload)}, has_booking={bool(booking_data)}")
+                            
+                            if booking_data and isinstance(booking_data, list) and len(booking_data) > 0:
+                                booking_info = booking_data[0]
+                                logger.info(f"[BOOKING CONFIRMATION DEBUG] booking_info keys: {booking_info.keys() if booking_info else 'None'}")
+                                if booking_info.get("overlap"):
+                                    extracted_data = booking_info
+                                    logger.info(f"[BOOKING CONFIRMATION DEBUG] ✅ Extracted overlap from conversation history: {booking_info.get('overlap_readable')}")
+                                    break
+                except Exception as e:
+                    logger.error(f"[BOOKING CONFIRMATION DEBUG] ❌ Error extracting overlap from history: {e}", exc_info=True)
+            
+            # If we have extracted data and user is confirming, create visit directly
+            if extracted_data and is_confirmation and buyer_id:
+                logger.info(f"[BOOKING CONFIRMATION DEBUG] ✅ All conditions met for visit creation! extracted_data keys: {extracted_data.keys()}")
+                try:
+                    from .tools.booking_tools import create_visit_tool, _format_datetime_readable
+                    import json
+                    
+                    overlap_times = extracted_data.get("overlap", [])
+                    property_id = extracted_data.get("property", {}).get("_id")
+                    
+                    if overlap_times and property_id:
+                        confirmed_time = overlap_times[0]
+                        
+                        visit_result = create_visit_tool.invoke({
+                            "property_id": property_id,
+                            "buyer_id": buyer_id,
+                            "confirmed_time": confirmed_time,
+                            "proposed_slots_json": json.dumps(overlap_times),
+                            "status": "confirmed"
+                        })
+                        
+                        if visit_result.get("success"):
+                            readable_time = _format_datetime_readable(confirmed_time, extracted_data.get("timezone"))
+                            visit_id = visit_result.get("visit_id")
+                            final_response = f"Perfect! Your visit is confirmed for {readable_time}. The seller has been notified. Visit ID: {visit_id}"
+                            
+                            return {
+                                "success": True,
+                                "response": final_response,
+                                "data": {
+                                    **extracted_data,
+                                    "visit_created": True,
+                                    "visit_id": visit_id,
+                                    "confirmed_time": confirmed_time,
+                                    "confirmed_time_readable": readable_time
+                                }
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "response": f"I had trouble confirming your visit: {visit_result.get('error')}. Please try again.",
+                                "error": visit_result.get('error'),
+                                "data": extracted_data
+                            }
+                except Exception as e:
+                    logger.error(f"Error creating visit from extracted data: {e}", exc_info=True)
+                    # Fall through to normal workflow
+            
+            # Normal workflow: run the agent
             final_state = self.app.invoke(initial_state, {"recursion_limit": 10})
             final_message = final_state["messages"][-1]
             final_response = final_message.content
             
             # Extract data from tool results
             data = final_state.get("data", {})
+            
+            # EXTRACT OVERLAP FROM CONVERSATION HISTORY if user is confirming
+            # This handles the case where user says "yes" in a new message
+            confirmation_keywords = ["yes", "ok", "confirm", "sure", "book it", "schedule it", 
+                                    "go ahead", "sounds good", "perfect", "great", "book this", "book"]
+            query_lower = query.lower().strip()
+            is_confirmation = any(keyword in query_lower for keyword in confirmation_keywords)
+            
+            if is_confirmation and conversation_history and not data.get("overlap"):
+                # User is confirming but current data doesn't have overlap
+                # Look for overlap in previous assistant messages' _payload
+                try:
+                    # Search backwards through conversation history for booking data
+                    for msg in reversed(conversation_history):
+                        if msg.get("role") == "assistant":
+                            payload = msg.get("_payload", {})
+                            booking_data = payload.get("booking")
+                            
+                            # Check if this message has overlap data
+                            if booking_data and isinstance(booking_data, list) and len(booking_data) > 0:
+                                booking_info = booking_data[0]
+                                if booking_info.get("overlap"):
+                                    # Found the overlap data!
+                                    data = booking_info
+                                    logger.info(f"Extracted overlap from conversation history _payload: {booking_info.get('overlap_readable')}")
+                                    break
+                    
+                    # If still no overlap, ask user to restate
+                    if not data.get("overlap"):
+                        import re
+                        # Extract property_id from query or conversation
+                        property_id = None
+                        for hist_msg in reversed(conversation_history):
+                            hist_content = hist_msg.get("content", "")
+                            prop_match = re.search(r'property[_\s]+([a-f0-9]{24})', hist_content.lower())
+                            if prop_match:
+                                property_id = prop_match.group(1)
+                                break
+                        
+                        if property_id:
+                            data = {
+                                "property": {"_id": property_id},
+                                "_needs_time": True
+                            }
+                            final_response = "I'd be happy to confirm your visit! Could you please tell me which time you'd like to book? (e.g., 'Wednesday at 2pm')"
+                            logger.info(f"Confirmation detected but no overlap data in history, asking user to restate time")
+                    
+                except Exception as e:
+                    logger.error(f"Error extracting data from conversation history: {e}", exc_info=True)
+            
+            # CONFIRMATION DETECTION: Check if user is confirming a visit
+            if is_confirmation and data.get("overlap") and buyer_id:
+                try:
+                    from .tools.booking_tools import create_visit_tool, _format_datetime_readable
+                    import json
+                    
+                    # Determine which time to confirm
+                    overlap_times = data.get("overlap", [])
+                    property_id = data.get("property", {}).get("_id")
+                    
+                    if overlap_times and property_id:
+                        # If multiple times, use the first one
+                        confirmed_time = overlap_times[0]
+                        
+                        # Create the visit
+                        visit_result = create_visit_tool.invoke({
+                            "property_id": property_id,
+                            "buyer_id": buyer_id,
+                            "confirmed_time": confirmed_time,
+                            "proposed_slots_json": json.dumps(overlap_times),
+                            "status": "confirmed"
+                        })
+                        
+                        if visit_result.get("success"):
+                            readable_time = _format_datetime_readable(confirmed_time, data.get("timezone"))
+                            visit_id = visit_result.get("visit_id")
+                            final_response = f"Perfect! Your visit is confirmed for {readable_time}. The seller has been notified. Visit ID: {visit_id}"
+                            # Add visit info to data for frontend
+                            data["visit_created"] = True
+                            data["visit_id"] = visit_id
+                            data["confirmed_time"] = confirmed_time
+                            data["confirmed_time_readable"] = readable_time
+                        else:
+                            final_response = f"I had trouble confirming your visit: {visit_result.get('error')}. Please try again."
+                except Exception as e:
+                    logger.error(f"Error creating visit on confirmation: {e}", exc_info=True)
+            elif is_confirmation and not buyer_id:
+                # User wants to confirm but not logged in
+                final_response = "To confirm this visit, please sign in to your account first."
+            elif is_confirmation and not data.get("overlap"):
+                # User says yes but no overlap found yet
+                final_response = "Which time would you like to confirm? Please let me know your available times first."
             
             # CRITICAL: Auto-parse and match if query mentions times but we only have seller slots
             query_lower = query.lower()
@@ -396,7 +572,11 @@ Example: User says "I'm available Saturday 2PM for property 123"
                                             overlap_readable = f"{formatted_times[0]} or {formatted_times[1]}"
                                         else:
                                             overlap_readable = ", ".join(formatted_times[:-1]) + f", or {formatted_times[-1]}"
-                                final_response = f"Perfect! I found some times that work for both you and the seller: {overlap_readable}. Which one would be most convenient for you?"
+                                # Confirmation-oriented prompt when overlap exists
+                                if overlap_array and len(overlap_array) == 1:
+                                    final_response = f"Great! I found a matching time: {overlap_readable}. Should I confirm this slot?"
+                                else:
+                                    final_response = f"Great! I found matching times: {overlap_readable}. Which one should I confirm?"
                             else:
                                 seller_slots = parsed.get('seller_slots_readable', 'some times')
                                 final_response = f"I checked the seller's availability. They're free on {seller_slots}, but unfortunately none match your preferred times. Would you like to choose one of the seller's available times, or propose different times?"
@@ -414,7 +594,10 @@ Example: User says "I'm available Saturday 2PM for property 123"
                                     overlap_readable = f"{formatted_times[0]} or {formatted_times[1]}"
                                 else:
                                     overlap_readable = ", ".join(formatted_times[:-1]) + f", or {formatted_times[-1]}"
-                            final_response = f"Perfect! I found some times that work for both you and the seller: {overlap_readable}. Which one would be most convenient for you?"
+                            if len(overlap_array) == 1:
+                                final_response = f"Great! I found a matching time: {overlap_readable}. Should I confirm this slot?"
+                            else:
+                                final_response = f"Great! I found matching times: {overlap_readable}. Which one should I confirm?"
                             # Update overlap_readable in data
                             if isinstance(data, dict):
                                 data["overlap_readable"] = overlap_readable
@@ -445,11 +628,17 @@ Example: User says "I'm available Saturday 2PM for property 123"
                             # Generate readable format from overlap array
                             overlap_readable = _format_slots_readable(data.get("overlap"), data.get("timezone"))
                         if overlap_readable and overlap_readable != "None":
-                            final_response = f"Perfect! I found some times that work for both you and the seller: {overlap_readable}. Which one would be most convenient for you?"
+                            if len(data.get("overlap", [])) == 1:
+                                final_response = f"Great! I found a matching time: {overlap_readable}. Should I confirm this slot?"
+                            else:
+                                final_response = f"Great! I found matching times: {overlap_readable}. Which one should I confirm?"
                         else:
                             # Fallback if formatting fails
                             overlap_count = len(data.get("overlap", []))
-                            final_response = f"Perfect! I found {overlap_count} matching time(s) that work for both you and the seller. Which one would be most convenient for you?"
+                            if overlap_count == 1:
+                                final_response = f"Great! I found a matching time that works for both you and the seller. Should I confirm this slot?"
+                            else:
+                                final_response = f"Great! I found {overlap_count} matching times that work for both you and the seller. Which one should I confirm?"
                     else:
                         seller_slots = data.get('seller_slots_readable', 'some times')
                         if not seller_slots and data.get("seller_slots"):
@@ -547,11 +736,17 @@ Example: User says "I'm available Saturday 2PM for property 123"
                                                         overlap_readable = f"{formatted_times[0]} or {formatted_times[1]}"
                                                     else:
                                                         overlap_readable = ", ".join(formatted_times[:-1]) + f", or {formatted_times[-1]}"
-                                                final_response = f"Perfect! I found some times that work for both you and the seller: {overlap_readable}. Which one would be most convenient for you?"
+                                                if len(overlap_array) == 1:
+                                                    final_response = f"Great! I found a matching time: {overlap_readable}. Should I confirm this slot?"
+                                                else:
+                                                    final_response = f"Great! I found matching times: {overlap_readable}. Which one should I confirm?"
                                             else:
                                                 # Last resort - use count
                                                 overlap_count = len(overlap_array)
-                                                final_response = f"Perfect! I found {overlap_count} matching time(s) that work for both you and the seller. Which one would be most convenient for you?"
+                                                if overlap_count == 1:
+                                                    final_response = f"Great! I found a matching time that works for both you and the seller. Should I confirm this slot?"
+                                                else:
+                                                    final_response = f"Great! I found {overlap_count} matching times that work for both you and the seller. Which one should I confirm?"
                                         else:
                                             seller_slots = match_result.get('seller_slots_readable', '')
                                             if not seller_slots or seller_slots == "None":
@@ -567,7 +762,8 @@ Example: User says "I'm available Saturday 2PM for property 123"
                             # Fall through to normal seller slots response
                     
                     # Normal seller slots response (no buyer times mentioned or auto-parse failed)
-                    if not final_response or "Perfect!" not in final_response and "unfortunately none match" not in final_response:
+                    # Don't overwrite if final_response already contains success messages
+                    if not final_response or ("Great!" not in final_response and "Perfect!" not in final_response and "unfortunately none match" not in final_response):
                         slots_readable = data.get("slots_readable", "")
                         if not slots_readable and data.get("slots"):
                             from .tools.booking_tools import _format_slots_readable

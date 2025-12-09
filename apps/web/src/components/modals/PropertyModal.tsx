@@ -186,9 +186,13 @@ export default function PropertyModal({
           >
             Close
           </button>
-          <button className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:from-indigo-500 hover:to-purple-500 transition-colors shadow-lg">
+          <Link
+            href={`/booking/${property._id}`}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:from-indigo-500 hover:to-purple-500 transition-colors shadow-lg text-center"
+            onClick={onClose}
+          >
             Contact Agent
-          </button>
+          </Link>
         </div>
       </div>
     </div>

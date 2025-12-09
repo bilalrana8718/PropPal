@@ -109,7 +109,7 @@ async def get_availability(property_id: str, db: AsyncIOMotorDatabase = Depends(
             doc["_id"] = str(doc["_id"])
             doc["seller_id"] = str(doc["seller_id"])
             if doc.get("property_id"):
-                doc["property_id"] = str(doc["property_id"])
+                doc["property_id"] = str(doc[" property_id"])
             return {
                 "success": True,
                 "slots": doc.get("slots", []),
@@ -211,19 +211,27 @@ async def get_seller_visits(
         if visit_doc.get("builder_id"):
             visit_doc["builder_id"] = str(visit_doc["builder_id"])
         
-        # Fetch property and buyer details for display
+        # Fetch property details for display
         if visit_doc.get("property_id"):
-            prop = await db["properties"].find_one({"_id": ObjectId(visit_doc["property_id"])}, {"title": 1, "location": 1, "price": 1})
+            prop = await db["properties"].find_one(
+                {"_id": ObjectId(visit_doc["property_id"])}, 
+                {"title": 1, "city": 1, "area": 1, "price": 1}
+            )
             if prop:
-                visit_doc["property_details"] = {
+                visit_doc["property"] = {
                     "title": prop.get("title"),
-                    "location": prop.get("location"),
+                    "city": prop.get("city"),
+                    "area": prop.get("area"),
                     "price": prop.get("price")
                 }
         
-        buyer = await db["users"].find_one({"_id": ObjectId(visit_doc["buyer_id"])}, {"name": 1, "email": 1, "phone": 1})
+        # Fetch buyer details for display
+        buyer = await db["users"].find_one(
+            {"_id": ObjectId(visit_doc["buyer_id"])}, 
+            {"name": 1, "email": 1, "phone": 1}
+        )
         if buyer:
-            visit_doc["buyer_details"] = {
+            visit_doc["buyer"] = {
                 "name": buyer.get("name"),
                 "email": buyer.get("email"),
                 "phone": buyer.get("phone")
@@ -438,7 +446,7 @@ async def get_visit_details(
                 prop["seller_id"] = str(prop["seller_id"])
             visit["property"] = prop
     
-    buyer = await db["users"].find_one({"_id": ObjectId(visit["buyer_id"])})
+    buyer = await db["users"].find_one({"_id": ObjectId(visit["buyer_id"] )})
     if buyer:
         buyer["_id"] = str(buyer["_id"])
         visit["buyer"] = buyer
@@ -453,3 +461,116 @@ async def get_visit_details(
         "visit": visit
     }
 
+
+# ========== BUYER VISIT MANAGEMENT ENDPOINTS ==========
+
+class CancelVisitRequest(BaseModel):
+    """Request body for canceling a visit"""
+    cancellation_reason: Optional[str] = Field(None, description="Reason for cancellation")
+
+
+@router.get("/visits/buyer/{buyer_id}")
+async def get_buyer_visits(
+    buyer_id: str,
+    status: Optional[str] = None,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Get all visit requests for a buyer, optionally filtered by status.
+    
+    Args:
+        buyer_id: MongoDB ObjectId of the buyer
+        status: Optional status filter (confirmed, pending_seller_response, rejected, etc.)
+    """
+    buyer_oid = _to_object_id(buyer_id)
+    if not buyer_oid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid buyer_id")
+    
+    query: Dict[str, Any] = {"buyer_id": buyer_oid}
+    if status:
+        query["status"] = status
+    
+    visits = []
+    async for visit_doc in db["visits"].find(query).sort("created_at", -1):
+        # Convert ObjectIds to strings
+        visit_doc["_id"] = str(visit_doc["_id"])
+        visit_doc["seller_id"] = str(visit_doc["seller_id"])
+        visit_doc["buyer_id"] = str(visit_doc["buyer_id"])
+        if visit_doc.get("property_id"):
+            visit_doc["property_id"] = str(visit_doc["property_id"])
+        if visit_doc.get("builder_id"):
+            visit_doc["builder_id"] = str(visit_doc["builder_id"])
+        
+        # Fetch property and seller details
+        if visit_doc.get("property_id"):
+            prop = await db["properties"].find_one({"_id": ObjectId(visit_doc["property_id"])}, {"title": 1, "location": 1, "price": 1, "images": 1})
+            if prop:
+                visit_doc["property_details"] = {
+                    "title": prop.get("title"),
+                    "location": prop.get("location"),
+                    "price": prop.get("price"),
+                    "image": prop.get("images", [])[0] if prop.get("images") else None
+                }
+        
+        seller = await db["users"].find_one({"_id": ObjectId(visit_doc["seller_id"])}, {"name": 1, "email": 1, "phone": 1})
+        if seller:
+            visit_doc["seller_details"] = {
+                "name": seller.get("name"),
+                "email": seller.get("email"),
+                "phone": seller.get("phone")
+            }
+        
+        visits.append(visit_doc)
+    
+    return {
+        "success": True,
+        "visits": visits,
+        "count": len(visits)
+    }
+
+
+@router.post("/visits/{visit_id}/cancel")
+async def cancel_visit(
+    visit_id: str,
+    body: CancelVisitRequest,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Cancel a visit (buyer or seller can cancel).
+    - Sets status to 'cancelled' and stores cancellation reason.
+    """
+    visit_oid = _to_object_id(visit_id)
+    if not visit_oid:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid visit_id")
+    
+    visit = await db["visits"].find_one({"_id": visit_oid})
+    if not visit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Visit not found")
+    
+    update_doc = {
+        "$set": {
+            "status": "cancelled",
+            "cancellation_reason": body.cancellation_reason or "Visit cancelled",
+            "updated_at": datetime.utcnow()
+        },
+        "$push": {
+            "counter_proposal_history": {
+                "action": "cancelled",
+                "timestamp": datetime.utcnow(),
+                "reason": body.cancellation_reason
+            }
+        }
+    }
+    
+    result = await db["visits"].update_one({"_id": visit_oid}, update_doc)
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=500, detail="Failed to cancel visit")
+    
+    # TODO: Send notification to other party
+    
+    return {
+        "success": True,
+        "message": "Visit cancelled successfully",
+        "visit_id": visit_id
+    }

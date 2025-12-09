@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
 import { MapPinIcon, CheckCircleIcon } from "@heroicons/react/24/outline"
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid"
@@ -185,12 +186,17 @@ export default function PropertyDetailPage({ property }: { property: Property })
                 <p className="text-slate-600 mb-6">
                   Schedule a visit or connect with the builder today. Our team is available 24/7.
                 </p>
-                <a
+                <Link
                   href={`/booking/${property._id}`}
                   className="block w-full py-3 rounded-xl font-semibold text-white bg-[linear-gradient(to_right,#f59e0b,var(--color-accent-gold))] hover:scale-[1.02] active:scale-95 transition-all shadow-md text-center"
+                  prefetch={true}
+                  onClick={() => {
+                    // Basic client-side log to confirm click and target
+                    console.log('[Contact Agent] navigating to booking page', { propertyId: property._id })
+                  }}
                 >
                   Contact Agent
-                </a>
+                </Link>
                 <ul className="mt-6 space-y-3 text-sm text-slate-600">
                   <li className="flex items-center gap-2">
                     <CheckCircleIcon className="h-5 w-5 text-green-600" /> Verified Listing

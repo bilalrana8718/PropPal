@@ -5,7 +5,7 @@ Routes user queries to the appropriate specialized agent.
 
 import operator
 import os
-from typing import TypedDict, Annotated, List, Optional
+from typing import TypedDict, Annotated, List, Optional, Dict
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -44,6 +44,12 @@ class RouterState(TypedDict):
     
     # Metadata for additional information (like interactive session flags)
     metadata: Optional[dict]
+    
+    # Conversation history for context-aware classification
+    conversation_history: Optional[List[Dict[str, str]]]
+    
+    # Booking mode flag - when True, stay in booking context
+    booking_mode: Optional[bool]
 
 # --- LLM and Router Definition ---
 
@@ -91,55 +97,103 @@ def get_booking_agent():
 def classify_intent_node(state: RouterState):
     """
     This is the first node that runs. It classifies the user's query.
+    Uses conversation history for context-aware classification.
+    If in booking_mode, handles classification differently.
     """
     print("--- [Main Graph] Classifying Intent ---")
     query = state['query']
+    conversation_history = state.get('conversation_history', [])
+    booking_mode = state.get('booking_mode', False)
+    
+    # If we're in booking mode, check if this is a booking-related query
+    if booking_mode:
+        print("--- [Main Graph] BOOKING MODE ACTIVE - Checking query type ---")
+        query_lower = query.lower().strip()
+        
+        # Keywords that indicate booking-related conversation
+        booking_keywords = [
+            'yes', 'no', 'confirm', 'book', 'schedule', 'visit', 'viewing', 'tour',
+            'available', 'time', 'slot', 'monday', 'tuesday', 'wednesday', 'thursday',
+            'friday', 'saturday', 'sunday', 'tomorrow', 'today', 'morning', 'afternoon',
+            'evening', 'am', 'pm', 'property', 'seller', 'cancel', 'reschedule'
+        ]
+        
+        # Check if query contains booking keywords
+        is_booking_related = any(keyword in query_lower for keyword in booking_keywords)
+        
+        if is_booking_related:
+            print("--- [Main Graph] Query is booking-related, routing to booking_agent ---")
+            return {"classification": "booking_agent"}
+        else:
+            # Off-topic question in booking mode - handle with general chat
+            print("--- [Main Graph] Off-topic question in booking mode, using general_chat ---")
+            return {"classification": "general_chat"}
+    
+    # Normal classification flow (not in booking mode)
+    # Build context from history
+    context_str = ""
+    if conversation_history:
+        # Get last 4 messages (2 exchanges) for context
+        recent = conversation_history[-4:]
+        context_lines = [f"{msg['role']}: {msg['content']}" for msg in recent]
+        context_str = "\n".join(context_lines)
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", (
-            "You are an expert router for PropPal, a real estate platform. Your job is to classify the user's query. "
-            "Respond with 'listing_agent' if they are asking about real estate, "
-            "property, listings, houses, apartments, buying, selling, renting, "
-            "property search, property details, or property prices. "
-            "Respond with 'builder_agent' if the query is about:\n"
-            "- Builders, contractors, construction companies, or construction professionals\n"
-            "- Builder services (plumbing, electrical, interior design, renovation, remodeling, "
-            "kitchen remodeling, bathroom renovation, roof repair, painting, tiling, flooring, "
-            "home construction, commercial construction, infrastructure, etc.)\n"
-            "- Finding or searching for builders or builder services\n"
-            "- Creating a builder profile or creating a builder service\n"
-            "- Any service-related queries (e.g., 'who can do plumbing', 'find interior designers', "
-            "'I need electrical work', 'kitchen renovation services')\n"
-            "Respond with 'booking_agent' if the query mentions booking a visit, scheduling a tour, arranging a viewing, picking a time to see a property, confirming a visit slot, or rescheduling/cancelling a visit. "
-            "For anything else (like 'hello', 'how are you', 'who are you?', "
-            "general questions, platform help, etc.), respond with 'general_chat'."
+            "You are an expert router for PropPal, a real estate platform. "
+            "Your job is to classify the user's query based on the current message AND conversation context.\n\n"
+            "CONVERSATION CONTEXT (recent messages):\n{context}\n\n"
+            "CLASSIFICATION RULES:\n"
+            "- If the user is responding to a booking confirmation question (e.g., 'yes', 'confirm', 'book it', 'sure') "
+            "AND the last assistant message asked about confirming a visit or mentioned 'Should I confirm', classify as 'booking_agent'\n"
+            "- If asking about properties, listings, houses, apartments, buying, selling, renting: 'listing_agent'\n"
+            "- If asking about builders, contractors, construction companies, or construction professionals: 'builder_agent'\n"
+            "- If asking about builder services (plumbing, electrical, interior design, renovation, etc.): 'builder_agent'\n"
+            "- If asking about booking visits, scheduling tours, arranging viewings: 'booking_agent'\n"
+            "- For general questions, greetings, platform help: 'general_chat'\n"
         )),
         ("human", "{query}")
     ])
     
     chain = prompt | classify_llm
-    result = chain.invoke({"query": query})
+    result = chain.invoke({"query": query, "context": context_str})
     
-    print(f"--- [Main Graph] Classification: {result.destination} ---")
+    print(f"--- [Main Graph] Classification: {result.destination} (with context: {bool(context_str)}) ---")
     return {"classification": result.destination}
 
 def general_chat_node(state: RouterState):
     """
     This node handles all non-property-related queries (e.g., "Hello").
+    In booking mode, provides brief answers to off-topic questions.
     """
     print("--- [Main Graph] Executing General Chat ---")
     query = state['query']
+    booking_mode = state.get('booking_mode', False)
     
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", (
-            "You are a helpful assistant for PropPal, a real estate platform. "
-            "You can help users with general questions about the platform, "
-            "account issues, or general conversation. You do *not* search for properties. "
-            "If users ask about property-related topics, politely redirect them to "
-            "ask about specific property searches."
-        )),
-        ("human", "{query}")
-    ])
+    if booking_mode:
+        # In booking mode, give brief answers and redirect back to booking
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are a helpful assistant for PropPal's booking system. "
+                "The user is currently in a property visit booking conversation. "
+                "Answer their question briefly (1-2 sentences max), then gently remind them "
+                "that you're here to help them schedule their property visit. "
+                "Keep responses short and friendly."
+            )),
+            ("human", "{query}")
+        ])
+    else:
+        # Normal general chat
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are a helpful assistant for PropPal, a real estate platform. "
+                "You can help users with general questions about the platform, "
+                "account issues, or general conversation. You do *not* search for properties. "
+                "If users ask about property-related topics, politely redirect them to "
+                "ask about specific property searches."
+            )),
+            ("human", "{query}")
+        ])
     
     chain = prompt | llm
     result = chain.invoke({"query": query})
@@ -233,36 +287,39 @@ def booking_agent_node(state: RouterState):
     print("--- [Main Graph] Routing to Booking Agent ---")
     query = state['query']
     clerk_id = state.get('clerk_id')
+    conversation_history = state.get('conversation_history', [])
     
     buyer_id = None
     if clerk_id:
         try:
-            from common.repositories.user_repository import get_user_repository
-            import asyncio
-
-            async def get_buyer_id():
-                user_repo = get_user_repository()
-                user = await user_repo.get_user_by_clerk_id(clerk_id)
-                return str(user.id) if user and hasattr(user, 'id') else None
-
-            def run_in_new_loop():
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                try:
-                    return new_loop.run_until_complete(get_buyer_id())
-                finally:
-                    new_loop.close()
-
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_in_new_loop)
-                buyer_id = future.result(timeout=5)
+            # Use synchronous MongoDB client to avoid event loop issues
+            from pymongo import MongoClient
+            import os
+            
+            # Get MongoDB URI from environment
+            mongo_uri = os.getenv("MONGODB_URL")
+            if mongo_uri:
+                # Create synchronous client
+                client = MongoClient(mongo_uri)
+                db = client["proppal"]
+                
+                # Query user by clerk_id
+                user_doc = db.users.find_one({"clerk_id": clerk_id})
+                if user_doc and "_id" in user_doc:
+                    buyer_id = str(user_doc["_id"])
+                
+                # Close client
+                client.close()
         except Exception as e:
             print(f"--- [Main Graph] Failed to resolve buyer_id: {e}")
             buyer_id = None
 
     booking_agent = get_booking_agent()
-    result = booking_agent.process_query(query, buyer_id=buyer_id)
+    result = booking_agent.process_query(
+        query,
+        buyer_id=buyer_id,
+        conversation_history=conversation_history
+    )
 
     response_message = result.get("response", "An error occurred in the booking agent.")
     booking_data = result.get("data", {})
@@ -333,9 +390,21 @@ class RouterAgent:
         self.app = router_agent_app
         self.name = "RouterAgent"
     
-    def process_query(self, query: str, clerk_id: Optional[str] = None) -> dict:
+    def process_query(
+        self,
+        query: str,
+        clerk_id: Optional[str] = None,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        booking_mode: bool = False
+    ) -> dict:
         """
         Process a user query through the router agent.
+        
+        Args:
+            query: The user's query/message
+            clerk_id: Optional Clerk user ID for authentication
+            conversation_history: Optional list of recent messages for context
+            booking_mode: If True, stay in booking context and handle off-topic with general chat
         """
         if not query or not query.strip():
             return {
@@ -360,6 +429,8 @@ class RouterAgent:
                 services=[],
                 booking=[],
                 metadata=None,
+                conversation_history=conversation_history or [],
+                booking_mode=booking_mode
             )
             
             final_state = self.app.invoke(initial_state)

@@ -6,6 +6,9 @@ import { usePathname } from 'next/navigation'
 import { useMemo } from 'react'
 import { HomeIcon } from '@heroicons/react/24/outline'
 import { motion } from 'framer-motion'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
+import SellerVisitsInbox from './SellerVisitsInbox'
+
 const segments = [
   { href: '/', label: 'Home' },
   { href: '/chat', label: 'Chat' },
@@ -16,6 +19,7 @@ const segments = [
 
 export default function Topbar() {
   const pathname = usePathname()
+  const { user } = useCurrentUser()
 
   const activeIndex = useMemo(() => {
     const i = segments.findIndex(r => pathname === r.href || pathname.startsWith(r.href + '/'))
@@ -67,11 +71,10 @@ export default function Topbar() {
                 <Link
                   key={r.href}
                   href={r.href}
-                  className={`flex items-center justify-center text-sm font-medium transition-colors ${
-                    idx === activeIndex
+                  className={`flex items-center justify-center text-sm font-medium transition-colors ${idx === activeIndex
                       ? 'text-white'
                       : 'text-slate-700 hover:text-[color:var(--color-primary)]'
-                  }`}
+                    }`}
                   style={{ fontFamily: 'var(--font-sans)' }}
                 >
                   {r.label}
@@ -87,6 +90,10 @@ export default function Topbar() {
           >
             Profile
           </Link>
+
+          {/* Seller Visits Inbox - Visible for all users */}
+          <SellerVisitsInbox />
+
           <div className="ml-1">
             <UserButton afterSignOutUrl="/" />
           </div>

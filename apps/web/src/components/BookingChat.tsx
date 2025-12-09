@@ -8,6 +8,8 @@ import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/Button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import BookingCard from '@/components/BookingCard'
+import VisitConfirmationCard from '@/components/VisitConfirmationCard'
 import {
   MapPinIcon,
   BanknotesIcon,
@@ -37,9 +39,12 @@ interface Message {
   sender: 'user' | 'ai'
   timestamp: Date
   booking?: any
+  visit?: any  // Add visit data from confirmation
 }
 
 export default function BookingChat({ property }: { property: Property }) {
+  console.log('[BookingChat] Component mounted for property:', property._id)
+
   const { user, clerkId } = useCurrentUser()
   const router = useRouter()
   const [messages, setMessages] = useState<Message[]>([
@@ -52,7 +57,27 @@ export default function BookingChat({ property }: { property: Property }) {
   ])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [sessionId] = useState(`booking_${Date.now()}`)
+
+  // Persist session ID in localStorage per property
+  const getOrCreateSessionId = () => {
+    // Check if we're in the browser (not SSR)
+    if (typeof window === 'undefined') {
+      return `booking_${property._id}_${Date.now()}`
+    }
+
+    const storageKey = `booking_session_${property._id}`
+    const existingSession = localStorage.getItem(storageKey)
+
+    if (existingSession) {
+      return existingSession
+    }
+
+    const newSession = `booking_${property._id}_${Date.now()}`
+    localStorage.setItem(storageKey, newSession)
+    return newSession
+  }
+
+  const [sessionId] = useState(getOrCreateSessionId())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollViewportRef = useRef<HTMLDivElement | null>(null)
   const hasInitialized = useRef(false)
@@ -72,16 +97,88 @@ export default function BookingChat({ property }: { property: Property }) {
     }
   }, [messages])
 
-  // Auto-start booking conversation
+  // Load chat history on mount
   useEffect(() => {
-    if (!hasInitialized.current) {
+    const userId = (user as any)?._id || user?.id
+    console.log('[BookingChat] useEffect triggered', {
+      hasUser: !!user,
+      userId,
+      hasInitialized: hasInitialized.current,
+      sessionId
+    })
+
+    const loadChatHistory = async () => {
+      // Skip if no user ID yet (will retry when user.id becomes available)
+      if (!userId) {
+        console.log('[BookingChat] Skipping history load: No user ID yet, will retry when available')
+        return
+      }
+
+      // Skip if already initialized for this user
+      if (hasInitialized.current) {
+        console.log('[BookingChat] Skipping history load: Already initialized')
+        return
+      }
+
       hasInitialized.current = true
-      // Wait a moment then send initial booking request
+      console.log('[BookingChat] User ID available, proceeding with history load')
+
+      try {
+        // Fetch chat history from backend
+        console.log(`[BookingChat] Fetching history for user_id=${userId}, session_id=${sessionId}`)
+
+        const response = await fetch(
+          `http://localhost:8000/api/chat/history?user_id=${userId}&session_id=${sessionId}`
+        )
+
+        console.log(`[BookingChat] History response status: ${response.status}`)
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log(`[BookingChat] History data:`, data)
+
+          if (data.messages && data.messages.length > 0) {
+            // Helper function to clean message content
+            const cleanMessageContent = (content: string, role: string) => {
+              // Remove "For property {id}: " prefix from user messages
+              if (role === 'user') {
+                const propertyPrefixRegex = /^For property [a-f0-9]+:\s*/i
+                return content.replace(propertyPrefixRegex, '')
+              }
+              return content
+            }
+
+            // Convert backend messages to frontend format
+            const loadedMessages: Message[] = data.messages.map((msg: any, index: number) => ({
+              id: `loaded_${index}`,
+              content: cleanMessageContent(msg.content, msg.role),
+              sender: msg.role === 'user' ? 'user' : 'ai',
+              timestamp: new Date(msg.timestamp),
+              booking: msg._payload?.booking?.[0],
+            }))
+
+            setMessages(loadedMessages)
+            console.log(`[BookingChat] ✅ Loaded ${loadedMessages.length} messages from history`)
+            return // Don't send initial message if history exists
+          } else {
+            console.log(`[BookingChat] No messages in history, will send initial message`)
+          }
+        } else {
+          const errorText = await response.text()
+          console.error(`[BookingChat] Failed to fetch history: ${response.status} - ${errorText}`)
+        }
+      } catch (error) {
+        console.error('[BookingChat] Failed to load chat history:', error)
+      }
+
+      // Only send initial message if no history was loaded
       setTimeout(() => {
         sendMessage(`I want to book a visit for property ${property._id}`, false)
       }, 1000)
     }
-  }, [property._id])
+
+    loadChatHistory()
+  }, [(user as any)?._id, user?.id, sessionId, property._id])
 
   const sendMessage = useCallback(
     async (messageText: string, clearInput = false) => {
@@ -101,9 +198,12 @@ export default function BookingChat({ property }: { property: Property }) {
       setIsLoading(true)
 
       try {
+        // Always include property context so the agent knows which listing
+        const messageForAgent = `For property ${property._id}: ${messageText}`
+
         const response = (await api.chat.sendMessage(
-          messageText,
-          user?._id,
+          messageForAgent,
+          user?.id,
           sessionId,
           clerkId || undefined,
         )) as {
@@ -141,6 +241,42 @@ export default function BookingChat({ property }: { property: Property }) {
     sendMessage(inputMessage, true)
   }
 
+  const handleCancelVisit = async (visitId: string) => {
+    if (!confirm('Are you sure you want to cancel this visit?')) return
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/booking/visits/${visitId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancellation_reason: 'Cancelled by buyer' })
+      })
+
+      if (response.ok) {
+        // Update message to reflect cancellation
+        setMessages(prev => prev.map(msg => {
+          if (msg.visit?._id === visitId) {
+            return {
+              ...msg,
+              visit: { ...msg.visit, status: 'cancelled' }
+            }
+          }
+          return msg
+        }))
+
+        // Add system message
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          content: 'Visit has been cancelled successfully.',
+          sender: 'ai',
+          timestamp: new Date()
+        }])
+      }
+    } catch (error) {
+      console.error('Error cancelling visit:', error)
+      alert('Failed to cancel visit')
+    }
+  }
+
   const quickReplies = [
     'I\'m available this weekend',
     'Tomorrow afternoon works',
@@ -165,7 +301,7 @@ export default function BookingChat({ property }: { property: Property }) {
               Main Chat
             </Link>
           </div>
-          
+
           {/* Property Quick Info */}
           <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl">
             <div className="h-16 w-16 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0">
@@ -236,7 +372,7 @@ export default function BookingChat({ property }: { property: Property }) {
                           })}
                         </p>
                       </div>
-                      
+
                       {/* Show availability if present */}
                       {message.booking?.slots_readable && (
                         <div className="mt-3 p-4 bg-teal-50 border border-teal-200 rounded-xl">
@@ -247,9 +383,9 @@ export default function BookingChat({ property }: { property: Property }) {
                           <p className="text-sm text-teal-800">{message.booking.slots_readable}</p>
                         </div>
                       )}
-                      
+
                       {/* Show overlap if present */}
-                      {message.booking?.overlap_readable && (
+                      {message.booking?.overlap_readable && !message.booking?.visit_created && (
                         <div className="mt-3 p-4 bg-green-50 border border-green-200 rounded-xl">
                           <div className="flex items-center mb-2">
                             <ClockIcon className="h-5 w-5 text-green-600 mr-2" />
@@ -257,6 +393,19 @@ export default function BookingChat({ property }: { property: Property }) {
                           </div>
                           <p className="text-sm text-green-800">{message.booking.overlap_readable}</p>
                         </div>
+                      )}
+
+                      {/* Show Visit Confirmation Card when visit is created */}
+                      {message.booking?.visit_created && (
+                        <VisitConfirmationCard
+                          visitId={message.booking.visit_id}
+                          propertyName={message.booking.property?.title || property.title}
+                          propertyCity={message.booking.property?.city || property.city}
+                          confirmedTime={message.booking.confirmed_time}
+                          confirmedTimeReadable={message.booking.confirmed_time_readable}
+                          status={message.booking.status || 'confirmed'}
+                          onCancel={handleCancelVisit}
+                        />
                       )}
                     </div>
                   )}
